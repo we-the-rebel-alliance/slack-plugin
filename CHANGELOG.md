@@ -5,8 +5,8 @@
 The plugin restarts at `0.0.0` as `@we-the-rebel-alliance/slack-plugin`, after the move to
 `we-the-rebel-alliance/slack-plugin`.
 
-- **OpenCode 2.4.1 only.** The host range is `>=2.4.1 <2.5.0` and the checks run on 2.4.1 alone; older releases are
-  gone from the tests. The dev dependencies are the 2.4.1 packages, with `effect` 4.1.0 as `@opencode/plugin`'s peer.
+- **OpenCode 2.4.1 only.** The host range is `>=2.4.1 <2.5.0` and the checks run on 2.4.1 alone; the test
+  matrices and code paths for older hosts are gone, while recorded fixtures keep the host they were captured on. The dev dependencies are the 2.4.1 packages, with `effect` 4.1.0 as `@opencode/plugin`'s peer.
 - **Two sources.** `slack.workspace` (the messages of the channels a consumer confirms) and `slack.mentions` (the
   messages that mention you). The `slack.dms` snapshot and its `dms_list` were removed, with the direct and group
   message scopes only it needed.

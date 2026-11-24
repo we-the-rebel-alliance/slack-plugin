@@ -39,7 +39,7 @@ describe("the errors tables", () => {
 describe("the status next steps", () => {
   const base: StatusInput = {
     version: "9.9.9",
-    hostVersion: "2.2.3",
+    hostVersion: "2.4.1",
     hostSupported: true,
     hostTested: true,
     parsed: parseOptions({ oauth: { client_id: "C1" } }),

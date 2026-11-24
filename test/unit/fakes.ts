@@ -1,5 +1,5 @@
 // Narrow test doubles for the parts of the plugin context the Slack plugin uses. Each fake implements only the
-// members the code calls, so the same tests typecheck against every 2.2.x `@opencode/plugin`.
+// members the code calls, so the same tests typecheck against the installed 2.4.1 `@opencode/plugin`.
 import type { Plugin } from "@opencode/plugin"
 import type { Rule } from "../../src/permissions.js"
 import type { ServerStatus } from "../../src/status.js"
