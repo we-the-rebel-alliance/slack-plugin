@@ -203,7 +203,7 @@ describe.each(HOST_VERSIONS)("the installed package on stock opencode %s", (vers
       expect(state.registered).toEqual({
         type: "remote",
         url: "https://mcp.slack.com/mcp",
-        oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history" },
+        oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read groups:read im:read mpim:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history" },
       })
       const rules = defaultRules()
       const build = state.agents.find((agent) => agent.id === "build")

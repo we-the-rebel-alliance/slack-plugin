@@ -8,6 +8,7 @@ import { parameters, SLACK_SCHEMAS } from "../host/slack-catalog.js"
 import { parseOptions } from "../../src/options.js"
 import { buildStatus, statusRows } from "../../src/status.js"
 import { classify, NAMESPACE_DESCRIPTION } from "../../src/tools.js"
+import { CHANNEL_TYPES, CHANNEL_TYPE_SCOPES } from "../../src/source.js"
 import { DEFAULT_SCOPES, TESTED_HOSTS } from "../../src/defaults.js"
 import { defaultRules } from "../../src/permissions.js"
 
@@ -132,7 +133,7 @@ describe("what the access option restricts", () => {
   test("status names every class it restricts, for each restricted value, and nothing at the default", () => {
     const rows = (access: "all" | "ask-changes" | "read-only") => {
       const status = buildStatus({
-        version: "9.9.9", hostVersion: "2.2.3", hostSupported: true, hostTested: true, parsed: parseOptions({}), access, active: true,
+        version: "9.9.9", hostVersion: "2.4.1", hostSupported: true, hostTested: true, parsed: parseOptions({}), access, active: true,
         nameInUse: false, client: { invalid: false }, servers: [], tools: [], agents: [], shadowedSkills: [],
       })
       return { status, text: statusRows(status).find((row) => row.label === "Access")!.value }
@@ -190,6 +191,14 @@ describe("the default sign-in scopes", () => {
 
   test("include the direct and group message history the source reads", () => {
     for (const scope of ["search:read.im", "search:read.mpim", "im:history", "mpim:history"]) expect(DEFAULT_SCOPES).toContain(scope)
+  })
+
+  test("include the read scopes for every conversation type the consent list asks for", () => {
+    for (const type of CHANNEL_TYPES) {
+      const scope = CHANNEL_TYPE_SCOPES[type]
+      expect({ type, scope, present: DEFAULT_SCOPES.includes(scope) }).toEqual({ type, scope, present: true })
+    }
+    for (const scope of ["groups:read", "im:read", "mpim:read"]) expect(DEFAULT_SCOPES).toContain(scope)
   })
 
   test("the app manifest requests exactly DEFAULT_SCOPES as its user scopes", () => {

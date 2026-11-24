@@ -192,7 +192,7 @@ describe("buildStatus details", () => {
     expect(buildStatus(input())).toMatchObject({
       client: { id: "C1", mode: "public_pkce", source: "options" },
       callback: "http://localhost:8765/callback",
-      scopes: ["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"],
+      scopes: ["channels:history", "channels:read", "groups:read", "im:read", "mpim:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"],
       asksBefore: [],
       host: { version: "2.4.1", range: ">=2.4.1 <2.5.0", tested: true },
     })
@@ -373,7 +373,7 @@ describe("formatStatus", () => {
       "Server: slack at https://mcp.slack.com/mcp",
       "Client: C1 (public, PKCE; set in plugin options)",
       "Callback: http://localhost:8765/callback (register exactly this URL in the app's Redirect URLs)",
-      "Scopes: channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history",
+      "Scopes: channels:history channels:read groups:read im:read mpim:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history",
       "Tools: 0 read, 0 private search, 0 file, 0 write",
       "Agents without default rules: none",
       "OpenCode: 2.4.1 (tested; supported range >=2.4.1 <2.5.0)",

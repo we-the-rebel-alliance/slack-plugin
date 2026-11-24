@@ -19,7 +19,7 @@ describe("parseOptions defaults", () => {
       options: {
         clientId: CLIENT,
         redirectUri: "http://localhost:8765/callback",
-        scopes: ["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"],
+        scopes: ["channels:history", "channels:read", "groups:read", "im:read", "mpim:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"],
         allowUntestedHost: false,
         access: "all",
         channels: [],

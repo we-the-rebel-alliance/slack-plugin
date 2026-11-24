@@ -221,6 +221,14 @@ export function threadMethod(options: EventsToolOptions, page: JsonSchema): Owne
 export { CHANNELS_LIST }
 /** Its action, as source-contract derives a suggest tool's (`<namespace>_<tool>`); allowed at every `access` value. */
 export const CHANNELS_LIST_ACTION = `${SERVER}_${CHANNELS_LIST}`
+/** The conversation types the consent list asks `slack_list_user_channels` for, and the user scope each needs. */
+export const CHANNEL_TYPES = ["public_channel", "private_channel", "mpim", "im"] as const
+export const CHANNEL_TYPE_SCOPES: Readonly<Record<(typeof CHANNEL_TYPES)[number], string>> = {
+  public_channel: "channels:read",
+  private_channel: "groups:read",
+  mpim: "mpim:read",
+  im: "im:read",
+}
 /** The pages of `slack_list_user_channels` one call reads, and the options it offers at most (the contract caps a suggest at 64). */
 const LIST_PAGES = 5
 const MAX_OPTIONS = 64
@@ -297,7 +305,7 @@ export async function slackChannels(read: Read, input: unknown): Promise<{ optio
   const used = new Set<string>()
   let cursor: string | undefined
   for (let page = 0; page < LIST_PAGES && seen.size < MAX_OPTIONS; page++) {
-    const listed = channelOptions(await read("slack_list_user_channels", { types: "public_channel,private_channel,mpim,im", limit: 200, ...(cursor === undefined ? {} : { cursor }) }))
+    const listed = channelOptions(await read("slack_list_user_channels", { types: CHANNEL_TYPES.join(","), limit: 200, ...(cursor === undefined ? {} : { cursor }) }))
     for (const option of listed.options) if (!seen.has(option.id) && seen.size < MAX_OPTIONS) seen.set(option.id, option)
     // A cursor already used would read the same page again: stop.
     if (listed.next === undefined || used.has(listed.next)) break

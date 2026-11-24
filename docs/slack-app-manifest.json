@@ -11,6 +11,9 @@
       "user": [
         "channels:history",
         "channels:read",
+        "groups:read",
+        "im:read",
+        "mpim:read",
         "search:read.public",
         "users:read",
         "search:read.private",

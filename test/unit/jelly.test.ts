@@ -27,7 +27,7 @@ describe("the jelly declaration", () => {
     const scopes = (jelly.signIns as SignIn[]).find((signIn) => signIn.id === SERVER)?.scopes
     expect(scopes).toEqual([...DEFAULT_SCOPES].sort())
     expect(scopes?.every((scope, index) => index === 0 || scope > scopes[index - 1]!)).toBe(true)
-    expect(scopes).toHaveLength(9)
+    expect(scopes).toHaveLength(12)
   })
 
   test("declares the flat access option, with the declaration schema's own words for its three values", () => {

@@ -3,12 +3,12 @@ export const DEFAULT_REDIRECT_URI = "http://localhost:8765/callback"
 export const HOSTED_REDIRECT_EXAMPLE = "https://host.example/oauth/return"
 export const CALLBACK_PORT_EXAMPLE = 8766
 /**
- * The user scopes the sign-in asks for: the public channels Slack's MCP tools read; the search the `slack.mentions`
- * source reads over public, private, direct and group messages; and the direct and group message history the
- * `slack.workspace` source reads for `D…` and `G…` ids (a `G…` id that is a private channel needs `groups:history`,
- * which is not a default).
+ * The user scopes the sign-in asks for: the channel, private-channel, group-message and direct-message details the
+ * consent list reads (`channels:read`, `groups:read`, `im:read`, `mpim:read`); the public channels and search the MCP
+ * tools read; and the direct and group message history the `slack.workspace` source reads for `D…` and `G…` ids (a `G…`
+ * id that is a private channel needs `groups:history`, which is not a default).
  */
-export const DEFAULT_SCOPES: readonly string[] = ["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"]
+export const DEFAULT_SCOPES: readonly string[] = ["channels:history", "channels:read", "groups:read", "im:read", "mpim:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"]
 /** The MCP server's name: the prefix of every Slack tool name and permission action, and the Code Mode namespace. */
 export const SERVER = "slack"
 export const APP_MANIFEST_URL = "https://github.com/we-the-rebel-alliance/slack-plugin/blob/master/docs/slack-app-manifest.json"

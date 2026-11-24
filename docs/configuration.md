@@ -31,7 +31,7 @@ Every option is optional. Pass options in the object form of a `plugins` entry:
 | `oauth.client_id` | Not set: the client ID saved in the `/connect` Slack app client ID entry is used | A non-empty string without spaces. The client ID is public. Find it under **Basic Information → App Credentials** in your Slack app. When set, it wins over `/connect`, and `/connect` shows no Slack app entry. |
 | `oauth.redirect_uri` | `http://localhost:8765/callback` | Either a loopback `http:` URL on host `localhost` or `127.0.0.1` with an explicit port, or an `https:` URL on any host. Both need a path, and neither may have a user name, password, query or fragment. It must exactly match a redirect URL registered in the Slack app. See [The callback: loopback or hosted](#the-callback-loopback-or-hosted). |
 | `oauth.callback_port` | Not set | A whole number from 1 to 65535: the port of OpenCode's local callback listener on `127.0.0.1`. Required with an `https:` `oauth.redirect_uri`, and refused with a loopback one, whose own port is the listener's. |
-| `oauth.scopes` | `["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"]` | A non-empty list of unique Slack user scopes, each without spaces. Your list replaces the default list. See [Scopes](#scopes). |
+| `oauth.scopes` | `["channels:history", "channels:read", "groups:read", "im:read", "mpim:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"]` | A non-empty list of unique Slack user scopes, each without spaces. Your list replaces the default list. See [Scopes](#scopes). |
 | `oauth.client_secret` | Not set (public client with PKCE) | A non-empty string, and only together with `oauth.client_id`. Set it only for a Slack app that does not use PKCE, and only through `{env:NAME}`. See [Client secret](#client-secret). |
 | `oauth.auth_server_metadata_url` | Not set: OpenCode discovers Slack's authorization server | An `https:` URL of at most 2048 characters, with no user name, password or fragment. Passed to OpenCode unchanged; OpenCode uses this OAuth metadata document in place of Slack's for the whole sign-in: its `authorization_endpoint`, its `token_endpoint` (which receives the code, every refresh token and any client secret) and its `issuer`. Point it only at your host's own sign-in service, serving a copy of Slack's metadata with only `token_endpoint` changed. See [Refresh behind a hosted callback](#refresh-behind-a-hosted-callback). |
 | `allowUntestedHost` | `false` | `true` or `false`. If it is `true`, the plugin runs on an OpenCode version outside its supported range, and status keeps warning. See [Host check](#host-check). |
@@ -157,7 +157,7 @@ When it loads, the plugin compares the OpenCode version with its supported range
 
 Someone who can create apps in your Slack workspace does this once for the organisation. If your organisation already has an internal app for Slack's MCP server, reuse it: add the redirect URL and the user scopes below, and turn on PKCE and the MCP server.
 
-1. Open [Slack app settings](https://api.slack.com/apps). Choose **Create New App → From a manifest**, and pick your workspace. Paste [`slack-app-manifest.json`](slack-app-manifest.json) and create the app. The manifest sets the redirect URL `http://localhost:8765/callback`, the user scopes `channels:history`, `channels:read`, `search:read.public` and `users:read`, PKCE on, token rotation off, and Slack's MCP server on (`is_mcp_enabled`).
+1. Open [Slack app settings](https://api.slack.com/apps). Choose **Create New App → From a manifest**, and pick your workspace. Paste [`slack-app-manifest.json`](slack-app-manifest.json) and create the app. The manifest sets the redirect URL `http://localhost:8765/callback`, the default user scopes ([Scopes](#scopes) lists them), PKCE on, token rotation off, and Slack's MCP server on (`is_mcp_enabled`).
 2. Slack does not document `is_mcp_enabled` in manifests, so confirm in the app's **Agents** section that **Slack Model Context Protocol (MCP) Server** is on. Turn it on if it is not.
 3. Get the app approved if your workspace requires admin approval for apps. Keep the app internal to your organisation, or publish it in the Slack Marketplace. Slack refuses unlisted distributed apps.
 4. Copy the **Client ID** from **Basic Information → App Credentials**. You do not need the client secret, because the app uses PKCE.
@@ -186,7 +186,7 @@ With a client ID, the plugin adds one MCP server named `slack`:
   "oauth": {
     "client_id": "YOUR_SLACK_CLIENT_ID",
     "redirect_uri": "http://localhost:8765/callback",
-    "scope": "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history"
+    "scope": "channels:history channels:read groups:read im:read mpim:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history"
   }
 }
 ```
@@ -384,7 +384,7 @@ Slack can add tools at any time. A tool the plugin does not know follows the nam
 
 The plugin requests the scopes in `oauth.scopes`. List each one in the Slack app too, under **OAuth & Permissions → User Token Scopes** (`oauth_config.scopes.user` in a manifest). Some workspaces also need an admin to approve them.
 
-The default scopes are read-only. They cover public message and channel search (`search:read.public`), public channel history and threads (`channels:history`), public channel details and members (`channels:read`), user profiles (`users:read`), direct and group message history (`im:history`, `mpim:history`), and what the `slack.mentions` source searches: private channels, direct messages and group direct messages (`search:read.private`, `search:read.im`, `search:read.mpim`). Private channel history needs `groups:history`, which is not a default. Other tools need more scopes. Without one, a call can fail with Slack's missing-scope error.
+The default scopes are read-only. They cover public message and channel search (`search:read.public`), public channel history and threads (`channels:history`), the conversation details and members the consent list reads (`channels:read`, `groups:read`, `im:read`, `mpim:read`), user profiles (`users:read`), direct and group message history (`im:history`, `mpim:history`), and what the `slack.mentions` source searches: private channels, direct messages and group direct messages (`search:read.private`, `search:read.im`, `search:read.mpim`). Private channel history needs `groups:history`, which is not a default. Other tools need more scopes. Without one, a call can fail with Slack's missing-scope error.
 
 **A sign-in that lacks a scope this version asks for** is named by `/slack-status`: when OpenCode stored the scopes Slack granted with the credential, status compares them with `oauth.scopes`, names the missing ones in its Scopes row and the RPC's `missingScopes`, and its next step is to add them to the app and sign in again. It reads only that stored list, never the token. Until then a read that needs the missing scope answers `SCOPE_MISSING`; the others work as before.
 
@@ -397,8 +397,8 @@ Scopes per tool, from Slack's [MCP scope table](https://docs.slack.dev/ai/slack-
 | User search (`slack_search_users`) | `search:read.users` |
 | Emoji search (`slack_search_emojis`) | `emoji:read` |
 | Private channel, direct message and group direct message history | `groups:history` (private channels), `im:history` and `mpim:history` (in the defaults) |
-| Members of private channels and group direct messages (`slack_list_channel_members`) | `groups:read`, `mpim:read` |
-| The user's channels of every type (`slack_list_user_channels`) | `channels:read`, `groups:read`, `im:read`, `mpim:read` |
+| Members of private channels and group direct messages (`slack_list_channel_members`) | `groups:read`, `mpim:read` (in the defaults) |
+| The user's channels of every type (`slack_list_user_channels`) | `channels:read`, `groups:read`, `im:read`, `mpim:read` (in the defaults) |
 | Email addresses in profiles | `users:read.email` |
 | Reading reactions (`slack_get_reactions`) | `reactions:read` |
 | Reading files (`slack_read_file`) | `files:read` |
