@@ -58,6 +58,18 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
     }
 
     /**
+     * `/slack-status` once the fake server reports connected. The 2.4 client probes a server with `server/discover` and
+     * then reconnects with the legacy handshake, so status can say `connecting` for a moment after the tools appear.
+     */
+    async function slashStatusConnected(project: Project): Promise<string> {
+      for (const deadline = Date.now() + 30_000; ;) {
+        const text = await slashStatus(project)
+        if (text.startsWith("Slack\nConnection: connected. ") || Date.now() > deadline) return text
+        await Bun.sleep(100)
+      }
+    }
+
+    /**
      * Runs `code` as Code Mode does, through a stock server's automation code action: OpenCode checks each tool's input
      * and output and evaluates permissions with nobody present to answer a prompt. The program reports by throwing
      * "SEEN <json>", so nothing is left behind and no model is involved.
@@ -118,7 +130,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         // `connecting` when the command runs.
         await discovered("defaults")
         expect((await host.client.command.list(at("defaults"))).data.map((command) => command.name)).toContain("slack-status")
-        const text = await slashStatus("defaults")
+        const text = await slashStatusConnected("defaults")
         expect(text).toStartWith("Slack\nConnection: connected. ")
         expect(text).toContain(`Client: ${CLIENT_ID} (public, PKCE; set in plugin options)`)
         expect(text).toContain('Agents without default rules: custom\n[\n  { "action": "slack_*", "resource": "*", "effect": "allow" },')
