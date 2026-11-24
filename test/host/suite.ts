@@ -114,6 +114,9 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
       })
 
       test("/slack-status posts the status into the session", async () => {
+        // The fake server connects in the background: wait for it, as the dialog would, so the status is not still
+        // `connecting` when the command runs.
+        await discovered("defaults")
         expect((await host.client.command.list(at("defaults"))).data.map((command) => command.name)).toContain("slack-status")
         const text = await slashStatus("defaults")
         expect(text).toStartWith("Slack\nConnection: connected. ")
