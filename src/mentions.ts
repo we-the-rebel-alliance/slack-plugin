@@ -38,9 +38,9 @@ import { record, str, webReader, webSignedIn, type WebRead, type WebReadOptions 
  * since a cursor. Slack's MCP search answers in Markdown, and a script cannot put each viewer's own user id in its
  * query, so this read takes the id from status's `auth.test` and searches for `<@U…>` with Slack's search API,
  * `assistant.search.context`, over public and private channels, group messages and direct messages. A tools RPC
- * method of class `read`, with its own action `slack_mentions_list`. After @domeevans's `mentions_list`
- * (domeevans/opencode-slack#1), reshaped as source-contract events. Its scopes are `search:read.public`,
- * `search:read.private`, `search:read.im` and `search:read.mpim`.
+ * method of class `read`, with its own action `slack_mentions_list`. After @domeevans's `mentions_list`, reshaped as
+ * source-contract events. Its scopes are `search:read.public`, `search:read.private`, `search:read.im` and
+ * `search:read.mpim`.
  */
 
 export { MENTIONS_LIST }

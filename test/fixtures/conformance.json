@@ -1,5 +1,5 @@
 {
-  "$comment": "Slack's answers for the source-contract conformance kit (test/support/conformance.ts), offline: auth.test's identity, the user's profile, slack_read_channel, slack_read_thread and slack_list_user_channels as Slack's server writes them, and the Web API answers of the slack.mentions and slack.dms sources (webApi, in Slack's documented shapes, keyed by method). No live call is made. Every workspace, channel, name and message is invented; the signed-in user is the placeholder U00CURRENTUSER, and the other members are Slack's documented example ids.",
+  "$comment": "Slack's answers for the source-contract conformance kit (test/support/conformance.ts), offline: auth.test's identity, the user's profile, slack_read_channel, slack_read_thread and slack_list_user_channels as Slack's server writes them, and the Web API answer of the slack.mentions source (webApi, in Slack's documented shape, keyed by method). No live call is made. Every workspace, channel, name and message is invented; the signed-in user is the placeholder U00CURRENTUSER, and the other members are Slack's documented example ids.",
   "now": "2026-11-13T12:00:00.000Z",
   "authTest": {
     "ok": true,
@@ -125,114 +125,6 @@
         "content": "<@U00CURRENTUSER> does Postgres work for you?\nSecond line.",
         "permalink": "https://example.slack.com/archives/C0EXAMPLE01/p1794477900000100?thread_ts=1794477600.000100&cid=C0EXAMPLE01"
       }
-    ],
-    "users.conversations": {
-      "ok": true,
-      "channels": [
-        {
-          "id": "D0EXAMPLE02",
-          "is_im": true,
-          "user": "W012A3CDE",
-          "updated": 1794486000
-        },
-        {
-          "id": "G0EXAMPLE04",
-          "is_mpim": true,
-          "updated": 1794484000
-        },
-        {
-          "id": "D0EXAMPLE06",
-          "is_im": true,
-          "user": "U00CURRENTUSER",
-          "updated": 1794480000
-        },
-        {
-          "id": "D0EXAMPLE07",
-          "is_im": true,
-          "user": "U012AB3CD",
-          "updated": 1794470000,
-          "properties": {
-            "is_dormant": true
-          }
-        }
-      ],
-      "response_metadata": {
-        "next_cursor": ""
-      }
-    },
-    "conversations.history": {
-      "D0EXAMPLE02": {
-        "ok": true,
-        "messages": [
-          {
-            "ts": "1794486000.000100",
-            "user": "W012A3CDE",
-            "text": "<@U00CURRENTUSER> can you review the migration plan?"
-          }
-        ]
-      },
-      "G0EXAMPLE04": {
-        "ok": true,
-        "messages": [
-          {
-            "ts": "1794484000.000100",
-            "user": "U012AB3CD",
-            "text": "The deploy key is: password = Qv7mZr2pLx9T"
-          }
-        ]
-      },
-      "D0EXAMPLE07": {
-        "error": "channel_not_found"
-      }
-    },
-    "conversations.info": {
-      "D0EXAMPLE02": {
-        "ok": true,
-        "channel": {
-          "id": "D0EXAMPLE02",
-          "unread_count_display": 1,
-          "last_read": "1794480000.000100"
-        }
-      },
-      "G0EXAMPLE04": {
-        "ok": true,
-        "channel": {
-          "id": "G0EXAMPLE04",
-          "last_read": "1794484000.000100"
-        }
-      }
-    },
-    "conversations.members": {
-      "G0EXAMPLE04": {
-        "ok": true,
-        "members": [
-          "U00CURRENTUSER",
-          "U012AB3CD",
-          "W012A3CDE"
-        ]
-      }
-    },
-    "users.info": {
-      "U012AB3CD": {
-        "ok": true,
-        "user": {
-          "name": "ama",
-          "real_name": "Ama Mensah",
-          "profile": {
-            "display_name": "Ama"
-          }
-        }
-      },
-      "W012A3CDE": {
-        "ok": true,
-        "user": {
-          "name": "kofi",
-          "real_name": "Kofi Boateng",
-          "profile": {
-            "display_name": ""
-          }
-        }
-      }
-    }
+    ]
   }
 }

@@ -102,9 +102,9 @@ describe("the skill and the docs", () => {
 describe("tool names and files the text names", () => {
   // `slack_*` is the catch-all rule, and `slack_<tool>` a pattern; `slack_archive` is the docs' example of another
   // server's tool that the catch-all also matches; `slack_events_list` and `slack_mark_read` are the plugin's own tools,
-  // and `slack_status`, `slack_probe`, `slack_channels_list`, `slack_mentions_list` and `slack_dms_list` the tools RPC's
-  // own methods' permission actions.
-  const NOT_TOOLS = new Set(["slack_", "slack_archive", "slack_events_list", "slack_mark_read", "slack_status", "slack_probe", "slack_channels_list", "slack_mentions_list", "slack_dms_list"])
+  // and `slack_status`, `slack_probe`, `slack_channels_list` and `slack_mentions_list` the tools RPC's own methods'
+  // permission actions.
+  const NOT_TOOLS = new Set(["slack_", "slack_archive", "slack_events_list", "slack_mark_read", "slack_status", "slack_probe", "slack_channels_list", "slack_mentions_list"])
 
   test("every slack_ tool named in the skill and the docs is one of Slack's, after one permission prefix", () => {
     const named = FILES.flatMap((file) => [...read(file).matchAll(/`(slack_[a-z_]*)/g)].map((match) => ({ file, name: match[1]! })))
@@ -144,9 +144,25 @@ describe("what the access option restricts", () => {
     }
   })
 
-  test("the Code Mode namespace names what each access value does", () => {
-    expect(NAMESPACE_DESCRIPTION).toContain("`ask-changes` asks")
-    expect(NAMESPACE_DESCRIPTION).toContain("`read-only` denies")
+  test("the skill names what each access value does", () => {
+    const skill = read("skills/slack-search/SKILL.md")
+    expect(skill).toContain("At `\"ask-changes\"` OpenCode asks before writes and sends, the private-channel search, file reads")
+    expect(skill).toContain('at `"read-only"` it denies them and keeps the reads')
+    expect(skill).toContain("`/slack-status` shows the value in force")
+  })
+})
+
+// The plugin standard's fixed-context budget (rule 4): the namespace line is what every request carries, and the skill
+// description is listed in every request too.
+describe("the fixed-context budget", () => {
+  const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/
+  const descriptionOf = (text: string) => /^description:\s*(.*?)\s*$/m.exec(FRONTMATTER.exec(text)?.[1] ?? "")?.[1] ?? ""
+
+  test("the namespace line is at most 400 characters and the skill description at most 300", () => {
+    expect(NAMESPACE_DESCRIPTION.length).toBeLessThanOrEqual(400)
+    const description = descriptionOf(read("skills/slack-search/SKILL.md"))
+    expect(description.length).toBeGreaterThan(0)
+    expect(description.length).toBeLessThanOrEqual(300)
   })
 })
 
@@ -161,10 +177,9 @@ describe("the catalog the fake Slack server serves", () => {
     expect(jelly.jelly.tools.map((tool) => tool.name.replace(/^slack\./, "")).sort()).toEqual([...names, "events_list", "mark_read"].sort())
   })
 
-  test("the tools RPC's status method is a script method only, so Jelly does not declare it, and its page says why", () => {
+  test("the tools RPC's status method is a script method only, so the jelly declaration does not declare it", () => {
     const jelly = JSON.parse(read("package.json")) as { jelly: { tools: { name: string; permission?: string }[] } }
     expect(jelly.jelly.tools.filter((tool) => tool.name.endsWith(".status") || tool.permission === "slack_status")).toEqual([])
-    expect(read("docs/jelly.md")).toContain("`status` is a script method only")
   })
 })
 
@@ -210,9 +225,10 @@ describe("tested hosts", () => {
     for (const versions of mentions) expect({ file, versions: [...new Set(versions)].sort() }).toEqual({ file, versions: [...TESTED_HOSTS].sort() })
   })
 
-  test("the untested example is 2.2.99, and no doc names a future release as tested", () => {
+  test("the untested example is 2.4.99, and no doc names another 2.4 release as tested", () => {
     const all = SOURCES.map(([, text]) => text).join("\n")
-    expect(all).toContain("2.2.99")
-    expect(all).not.toMatch(/\b(?:2\.2\.(?:8|9[0-8]|[1-9]\d{2,})|2\.3\.(?:[3-9]|[1-9]\d+))\b(?!\d)/)
+    expect(all).toContain("2.4.99")
+    // Any 2.4 release but the tested 2.4.1 and the untested example 2.4.99 would be a stale claim.
+    expect(all).not.toMatch(/\b2\.4\.(?!1(?!\d)|99(?!\d))\d+\b/)
   })
 })

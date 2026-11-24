@@ -7,9 +7,8 @@ import type { Status } from "./status.js"
 import { WEB_READ } from "./tools.js"
 
 /**
- * What the two Web API sources, `slack.mentions` (`mentions_list`) and `slack.dms` (`dms_list`), share: their options,
- * the one read path, how they wait out Slack's rate limit, and how Slack's refusals become the plugin's codes. After
- * @domeevans's structured reads (domeevans/opencode-slack#1).
+ * What the Web API source, `slack.mentions` (`mentions_list`), is built on: its options, the one read path, how it waits
+ * out Slack's rate limit, and how Slack's refusals become the plugin's codes. After @domeevans's structured reads.
  *
  * Each Web API call is a declared operation of its source: before it, the read asserts `slack.read` on
  * `<account>:<method>` (`T0123:assistant.search.context`), the rule source-contract derives for a dotted operation, so

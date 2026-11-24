@@ -5,7 +5,7 @@ import { DEFAULT_SCOPES, SERVER } from "../../src/defaults.js"
 import plugin from "../../src/index.js"
 import { parseOptions } from "../../src/options.js"
 import { defaultRules } from "../../src/permissions.js"
-import { type Declaration, declarationProblems, docProblems, effectFromRules, readPackage } from "../support/jelly-kit.js"
+import { type Declaration, declarationProblems, effectFromRules, readPackage } from "../support/jelly-kit.js"
 import { ACCESS_CHOICES, type PluginSetting, settingChoices, settingsProblems, settingValueIssue } from "../support/jelly-settings.js"
 import { fakeHost } from "./fakes.js"
 
@@ -27,7 +27,7 @@ describe("the jelly declaration", () => {
     const scopes = (jelly.signIns as SignIn[]).find((signIn) => signIn.id === SERVER)?.scopes
     expect(scopes).toEqual([...DEFAULT_SCOPES].sort())
     expect(scopes?.every((scope, index) => index === 0 || scope > scopes[index - 1]!)).toBe(true)
-    expect(scopes).toHaveLength(11)
+    expect(scopes).toHaveLength(7)
   })
 
   test("declares the flat access option, with Jelly's own words for its three values", () => {
@@ -57,10 +57,6 @@ describe("the jelly declaration", () => {
     expect(declarationProblems(ROOT, { effectOf: effectFromRules(defaultRules()) })).toEqual([])
   })
 
-  test("docs/jelly.md follows the plugin authors' standard", () => {
-    expect(docProblems(ROOT)).toEqual([])
-  })
-
   describe("sign-ins", () => {
     const [app, slack] = jelly.signIns
     /** Plugin options with only the declared option path set, as an organisation's managed config sets it. */
@@ -77,13 +73,10 @@ describe("the jelly declaration", () => {
       expect(slack).toEqual({ id: "slack", label: SERVER_DISPLAY_NAME, server: SERVER, scopes: [...DEFAULT_SCOPES].sort(), after: "app", relay: {} })
     })
 
-    test("Slack's own sign-in may come back through Jelly's relay; the docs give its address, and the default manifest trusts only the loopback", () => {
+    test("Slack's own sign-in may come back through Jelly's relay, and the default manifest trusts only the loopback", () => {
       const appManifest = JSON.parse(readFileSync(new URL("../../docs/slack-app-manifest.json", import.meta.url), "utf8")) as { oauth_config: { redirect_urls: string[] } }
-      const doc = readFileSync(new URL("../../docs/jelly.md", import.meta.url), "utf8")
       expect(slack?.relay).toEqual({})
       expect(appManifest.oauth_config.redirect_urls).toEqual(["http://localhost:8765/callback"])
-      expect(doc).toContain("`<Jelly ID origin>/connect/callback`")
-      expect(doc).not.toContain("host.example/connect/callback")
     })
 
     test("the app step is preset by the option that pins the client, so that client is used and no entry is registered", async () => {

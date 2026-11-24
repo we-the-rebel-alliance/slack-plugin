@@ -6,7 +6,7 @@ import { loadSkills, parseSkill, shadowedSkills } from "../../src/skills.js"
 import { VERSION } from "../../src/version.js"
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url))
-const REINSTALL = `Reinstall the plugin: run opencode plugin remove github:joe-broadhead/opencode-slack#v${VERSION}, then opencode plugin add github:joe-broadhead/opencode-slack#v${VERSION}, then opencode reload.`
+const REINSTALL = `Reinstall the plugin: run opencode plugin remove github:we-the-rebel-alliance/slack-plugin#v${VERSION}, then opencode plugin add github:we-the-rebel-alliance/slack-plugin#v${VERSION}, then opencode reload.`
 const SEARCH = readFileSync(join(REPO, "skills", "slack-search", "SKILL.md"), "utf8")
 const crlf = (text: string) => text.replace(/\r?\n/g, "\r\n")
 

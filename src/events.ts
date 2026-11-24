@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import type { Plugin } from "@opencode/plugin"
 import { decodeBoundCursor, encodeBoundCursor, type CursorBinding } from "@we-the-rebel-alliance/source-contract/cursor"
 import {
@@ -26,7 +25,7 @@ import type { Identity } from "./identity.js"
 import type { Status } from "./status.js"
 
 /**
- * `slack_events_list`: the events of the `slack.workspace` source (package.json's `sources`, source-contract version 1).
+ * `slack_events_list`: the events of the `slack.workspace` source (package.json's `sources`, the source contract).
  * It lists the messages posted since a cursor in the channels and direct messages the call's `scope.channels` names,
  * within the plugin's `events.channels` option when that is set, as normalised events, oldest first. The package's
  * `events` module builds the events and the page, refuses an event that holds a secret (`refused[]`), and its `cursor`
@@ -43,7 +42,7 @@ import type { Status } from "./status.js"
  */
 
 /** The package, which every page names. */
-export const PLUGIN_NAME = "@joe-broadhead/opencode-slack"
+export const PLUGIN_NAME = "@we-the-rebel-alliance/slack-plugin"
 /** The source's id in package.json's `sources`. */
 export const SOURCE_ID = "slack.workspace"
 /** The name `events_list`, `probe` and every event know the source by: the descriptor's `input.source`. */
@@ -545,7 +544,7 @@ async function channelMessages(read: Read, channel: string, after: bigint, now: 
   throw tooMany(channel)
 }
 
-/** What a cursor is bound to: this plugin, this source, the account and, when the call names one, the scope. */
+/** A cursor is bound to this plugin, source, account and, when the call names one, the scope. */
 export const bindingOf = (account: string, scope: EventsListRequest["scope"]): CursorBinding => ({
   plugin: CURSOR_PLUGIN,
   source: SLACK_SOURCE,
@@ -553,19 +552,15 @@ export const bindingOf = (account: string, scope: EventsListRequest["scope"]): C
   ...(scope === undefined ? {} : { scope }),
 })
 
-/** A contract 1 cursor's binding: the account and owner, as 16 hex digits. Read for one release, never written. */
-const legacyBindingOf = (account: string, owner: EventsOwner) => createHash("sha256").update(`${account}\u0000${owner.id}`).digest("hex").slice(0, 16)
-
 /**
- * The cursor's per-channel bounds. A cursor of another plugin, source, account or scope is `CURSOR_INVALID`. A contract 1
- * cursor is read once, for the whole source and the same account and owner, so a collector holding one resumes.
+ * The cursor's per-channel bounds. A cursor of another plugin, source, account or scope is `CURSOR_INVALID`: only this
+ * plugin's own bound cursors are read.
  */
-function boundsOf(cursor: string, binding: CursorBinding, owner: EventsOwner): Map<string, bigint> {
-  const decoded = decodeBoundCursor(binding, cursor, { acceptV1: true })
+function boundsOf(cursor: string, binding: CursorBinding): Map<string, bigint> {
+  const decoded = decodeBoundCursor(binding, cursor)
   const state = decoded.ok ? decoded.state : {}
   const entries = Object.entries(record(state["c"]))
-  const foreign = !decoded.ok || (decoded.legacy && state["o"] !== legacyBindingOf(binding.account, owner))
-  if (foreign || entries.some(([channel, ts]) => !CHANNEL_ID.test(channel) || typeof ts !== "string" || !TS.test(ts))) {
+  if (!decoded.ok || entries.some(([channel, ts]) => !CHANNEL_ID.test(channel) || typeof ts !== "string" || !TS.test(ts))) {
     throw eventsError("CURSOR_INVALID", "The cursor was not issued by events_list for this Slack workspace, sign-in and scope.", "Call events_list without a cursor, with since, to start again.")
   }
   return new Map(entries.map(([channel, ts]) => [channel, micros(ts as string)]))
@@ -586,7 +581,7 @@ export async function slackEvents(read: Read, who: Who, optionChannels: readonly
   }
   const channels = channelsToRead(optionChannels, scoped)
   const binding = bindingOf(account, request.scope)
-  const known = request.cursor === undefined ? new Map<string, bigint>() : boundsOf(request.cursor, binding, owner)
+  const known = request.cursor === undefined ? new Map<string, bigint>() : boundsOf(request.cursor, binding)
   // The bound is exclusive: one microsecond before the start lists a message posted at the start itself.
   const start = BigInt(startTime(request, now)) * 1000n - 1n
   const nowMicros = BigInt(now) * 1000n

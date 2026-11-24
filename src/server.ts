@@ -12,7 +12,7 @@ type ServerConfig = Parameters<McpEditor["set"]>[1]
  * An `https:` redirect also sets `callback_port`, the port OpenCode's listener takes on 127.0.0.1; a loopback
  * redirect leaves it out, so OpenCode listens on the redirect's own port. `auth_server_metadata_url`, when set, is
  * passed unchanged: OpenCode then reads that document instead of discovering Slack's, and sends every token exchange
- * and refresh to its `token_endpoint`. Every supported host (2.2.3 on) reads the key. Protocol, timeouts, headers and Code
+ * and refresh to its `token_endpoint`. Every supported host (2.4.1 on) reads the key. Protocol, timeouts, headers and Code
  * Mode keep the host defaults.
  */
 export function serverConfig(options: Options, client: Client): ServerConfig {

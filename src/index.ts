@@ -7,7 +7,6 @@ import { eventsMethod, eventsTool, PAGE_OUTPUT, type EventsToolOptions } from ".
 import { STATUS_WAIT_MS, workspaceIdentity } from "./identity.js"
 import { markReadMethod, markReadTool, type MarkReadOptions } from "./mark-read.js"
 import { channelsMethod, probeMethod, threadMethod } from "./source.js"
-import { dmsMethod } from "./dms.js"
 import { mentionsMethod } from "./mentions.js"
 import type { WebReadOptions } from "./web-reads.js"
 import { slackApi } from "./slack-api.js"
@@ -74,7 +73,7 @@ export default Plugin.define({
       ? undefined
       : { tool: ctx.tool, permission: ctx.permission, channels: options.channels, owned: () => !nameInUse, identity: () => identity.get(), status: () => status({ account: false }) }
     const marking: MarkReadOptions | undefined = options === undefined ? undefined : { permission: ctx.permission, api, status: () => status({ account: false }) }
-    // The slack.mentions and slack.dms sources: tools RPC methods that read Slack's Web API through the same client.
+    // The slack.mentions source: a tools RPC method that reads Slack's Web API through the same client.
     const webReads: WebReadOptions | undefined = options === undefined ? undefined : { permission: ctx.permission, api, identity: () => identity.get(), status: () => status({ account: false }) }
 
     if (options !== undefined) {
@@ -197,7 +196,6 @@ export default Plugin.define({
             threadMethod(events, PAGE_OUTPUT),
             channelsMethod(events),
             mentionsMethod(webReads),
-            dmsMethod(webReads),
             markReadMethod(marking),
             statusMethod(() => status()),
           ],

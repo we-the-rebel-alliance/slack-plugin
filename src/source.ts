@@ -36,7 +36,7 @@ import type { JsonSchema, OwnedMethod } from "./host/tools-rpc.js"
 import { CHANNELS_LIST } from "./tools.js"
 
 /**
- * The two reads source-contract version 1 adds beside `events_list`, both tools RPC methods only:
+ * The reads the source contract adds beside `events_list`, all tools RPC methods only:
  *
  * - `probe` (`slack_probe`, package.json's `sources.probe.action`): the signed-in workspace and user, and no content. The
  *   account and the owner's id are status's, from one `auth.test` per sign-in, as every page's are; the owner's label is
@@ -61,7 +61,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 // ── probe ────────────────────────────────────────────────────────────────
 
 /** The names `probe` knows the plugin's sources by: each descriptor's `input.source`. */
-export const SOURCE_NAMES: readonly string[] = [SLACK_SOURCE, "mentions", "dms"]
+export const SOURCE_NAMES: readonly string[] = [SLACK_SOURCE, "mentions"]
 
 /**
  * `probe`'s answer for the signed-in account: who the source belongs to, and nothing it reads. One sign-in serves
@@ -111,7 +111,7 @@ export function probeMethod(options: EventsToolOptions): OwnedMethod {
     class: "read",
     name: PROBE,
     action: PROBE_ACTION,
-    description: "The signed-in Slack workspace and user for one of the plugin's sources (slack, mentions or dms), as Slack's auth.test names them, checked against the user's own profile; no content.",
+    description: "The signed-in Slack workspace and user for one of the plugin's sources (slack or mentions), as Slack's auth.test names them, checked against the user's own profile; no content.",
     input: PROBE_INPUT,
     output: PROBE_OUTPUT,
     run: async (input, call) => {

@@ -1,12 +1,11 @@
 // slack_events_list, the slack.workspace source's events, against a synthetic Slack that answers in the Markdown layout
-// Slack's server writes: the package's contract 1 conformance check through the tool and through the tools RPC method,
+// Slack's server writes: the contract's events_list conformance check through the tool and through the tools RPC method,
 // the parser, the events a message makes, the cursor's size and binding, a window too large for one call, the gap, the
 // screening and the refusals. Every name, id and message below is invented.
 import { describe, expect, test } from "bun:test"
-import { createHash } from "node:crypto"
-import { encodeCursor } from "@we-the-rebel-alliance/source-contract/cursor"
+import { encodeBoundCursor, encodeCursor } from "@we-the-rebel-alliance/source-contract/cursor"
 import { assertEventsListConformance, EVENT_LIMITS, resultProblems, type EventsListInput, type EventsListResult } from "@we-the-rebel-alliance/source-contract/events"
-import { channelPage, eventsMethod, eventsTool, EVENTS_ACTION, MAX_CHANNELS, messageEvent, micros, profileOf, reader, RETENTION_DAYS, textMessages, tsOf, type EventsToolOptions } from "../../src/events.js"
+import { bindingOf, channelPage, eventsMethod, eventsTool, EVENTS_ACTION, MAX_CHANNELS, messageEvent, micros, profileOf, reader, RETENTION_DAYS, textMessages, tsOf, type EventsToolOptions } from "../../src/events.js"
 import type { Identity } from "../../src/identity.js"
 import type { ToolCall } from "../../src/host/tools-rpc.js"
 import type { Status } from "../../src/status.js"
@@ -278,19 +277,10 @@ describe("slack_events_list", () => {
     await expect(list({ scope: { users: [DM] } })).rejects.toThrow(/^INPUT_INVALID: /)
   })
 
-  test("reads a contract 1 cursor of the same account and owner once, for the whole source", async () => {
-    const legacy = (owner: string) => encodeCursor("slack", { o: createHash("sha256").update(`${IDENTITY.teamId}\u0000${owner}`).digest("hex").slice(0, 16), c: { [CHANNEL]: tsAt("2026-11-04T00:00:00Z") } })
-    const page = await run()({ cursor: legacy(OWNER.id) })
-    expect(page.events.some((event) => event.external_id === `${CHANNEL}:${tsAt("2026-11-04T15:30:00Z")}`)).toBe(true)
-    expect(page.events.some((event) => event.external_id === `${CHANNEL}:${tsAt("2026-11-02T09:00:00Z")}`)).toBe(false)
-    await expect(run()({ cursor: legacy("slack:someone-else") })).rejects.toThrow(/^CURSOR_INVALID: /)
-    await expect(run()({ cursor: legacy(OWNER.id), scope: { channels: [CHANNEL] } })).rejects.toThrow(/^CURSOR_INVALID: /)
-  })
-
   test("answers a gap for a cursor older than it reads back, and refuses a message that holds a secret for good", async () => {
     const old = tsOf(BigInt(NOW - (RETENTION_DAYS + 10) * 86_400_000) * 1000n)
     expect((await run()({ cursor: (await run()({ since: SINCE, limit: 1 })).cursor })).gap).toBeUndefined()
-    const aged = encodeCursor("slack", { o: createHash("sha256").update(`${IDENTITY.teamId}\u0000${OWNER.id}`).digest("hex").slice(0, 16), c: { [CHANNEL]: old } })
+    const aged = encodeBoundCursor(bindingOf(IDENTITY.teamId, undefined), { c: { [CHANNEL]: old } })
     const gapped = await run()({ cursor: aged })
     expect(gapped.gap).toEqual({ reason: "expired", since: new Date(NOW - RETENTION_DAYS * 86_400_000).toISOString() })
     expect(resultProblems(gapped)).toEqual([])
@@ -336,7 +326,8 @@ describe("slack_events_list", () => {
     await expect(list({ account: "T0OTHER0001" })).rejects.toThrow(/^ACCOUNT_UNKNOWN: .* Next step: Leave "account" out, or pass "T0ACME0001"/)
     const theirs = (await run(slack(), undefined, { ...IDENTITY, teamId: "T0OTHER0001" })({ since: SINCE })).cursor
     await expect(list({ cursor: theirs })).rejects.toThrow(/^CURSOR_INVALID: /)
-    await expect(list({ cursor: encodeCursor("slack", { o: "x", c: { "#general": "1.0" } }) })).rejects.toThrow(/^CURSOR_INVALID: /)
+    // A cursor of this plugin and source that is not bound to an account and scope is refused, never read.
+    await expect(list({ cursor: encodeCursor("slack", { c: { "#general": "1.0" } }) })).rejects.toThrow(/^CURSOR_INVALID: /)
   })
 
   test("passes a refused read through untouched, names Slack's own failure with the channel, and status's code when it cannot call", async () => {
