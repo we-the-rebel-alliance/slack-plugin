@@ -2,7 +2,7 @@
 
 Unofficial plugin. Not affiliated with Slack.
 
-A script can call every Slack tool this plugin knows, with no model: a cron job, a shell script, or any program that can reach the OpenCode server. It uses the tools RPC, `slack.workspace.tools`, through `opencode api` or an OpenCode client.
+A script can call every Slack tool this plugin knows, with no model: an OpenCode automation, a shell script, or any program that can reach the OpenCode server. It uses the tools RPC, `slack.workspace.tools`, through `opencode api` or an OpenCode client.
 
 | Class | Methods |
 | --- | --- |
@@ -11,14 +11,14 @@ A script can call every Slack tool this plugin knows, with no model: a cron job,
 | write | `slack_create_canvas`, `slack_update_canvas`, `slack_add_reaction`, `slack_get_file_upload_url`, `slack_complete_file_upload`, `slack_create_conversation`, `slack_create_list`, `slack_update_list`, `slack_add_list_record`, `slack_update_list_record` |
 | events | `events_list`: `slack_events_list`, the messages posted since a cursor in the channels a `scope.channels` names (within the `events.channels` option when set), as the `slack.workspace` source's events ([configuration](configuration.md#events-list)) |
 | source | `probe`: `slack_probe`, the signed-in workspace and user for a source, and no content; `thread_read`: `slack_slack_read_thread`, one listed event's thread, refused outside the confirmed channels; `channels_list`: `slack_channels_list`, your conversations as consent options ([configuration](configuration.md#probe-thread_read-and-channels_list)) |
-| mentions and DMs | `mentions_list`: `slack_mentions_list`, the messages that mention you as the `slack.mentions` source's events ([configuration](configuration.md#mentions)); `dms_list`: `slack_dms_list`, your direct and group messages as an inbox snapshot ([configuration](configuration.md#direct-messages)). Each asks at `ask-changes` and is denied at `read-only`, like the private search, and each Web API read also asserts `slack.read` on `<workspace>:<method>` |
+| mentions | `mentions_list`: `slack_mentions_list`, the messages that mention you as the `slack.mentions` source's events ([configuration](configuration.md#mentions)). It asks at `ask-changes` and is denied at `read-only`, like the private search, and each Web API read also asserts `slack.read` on `<workspace>:<method>` |
 | write (the plugin's own) | `mark_read`: `slack_mark_read`, marks a conversation read up to a message with Slack's `conversations.mark` ([configuration](configuration.md#mark-as-read)) |
 | `status` | read: the status model of `/slack-status`, with the signed-in account's `teamId`, `userId` and `enterpriseId` while connected ([configuration](configuration.md#status-and-rpc)). Its permission action, `slack_status`, is allowed at every `access` value, so it answers when nothing else can |
 | `describe` | not a tool: lists the methods, their classes and permission actions, whether OpenCode lists each tool now, each tool's input as JSON Schema, and — with a session — that session's permission for each |
 
 The class is the worst thing a tool can do. It never decides whether a call runs: the rules do. It is what `describe` reports and what a job's approval shows.
 
-Each method's permission name is the tool name with the server's prefix, `slack_`, for example `slack_slack_search_public`: Slack's own server already names its tools `slack_*`, so the doubled prefix is how the host scopes a rule to this server. Each MCP method runs the tool with the same input: Slack's own tool, through OpenCode's own connection and sign-in, which the plugin never sees. The plugin's own `status` and `mark_read` are the exceptions: the plugin reads the Slack sign-in's token in one module, `src/slack-api.ts`, only to call Slack's `auth.test` and `conversations.mark`; it never stores, caches, logs or returns it. A tool Slack adds later is not a method until it is classified in this plugin's table; `describe` lists it under `unclassified`, and `/slack-status` names it.
+Each method's permission name is the tool name with the server's prefix, `slack_`, for example `slack_slack_search_public`: Slack's own server already names its tools `slack_*`, so the doubled prefix is how the host scopes a rule to this server. Each MCP method runs the tool with the same input: Slack's own tool, through OpenCode's own connection and sign-in, which the plugin never sees. The plugin's own `status`, `mark_read` and `mentions_list` are the exceptions: the plugin reads the Slack sign-in's token in one module, `src/slack-api.ts`, only to call Slack's `auth.test`, `conversations.mark` and `assistant.search.context`; it never stores, caches, logs or returns it. A tool Slack adds later is not a method until it is classified in this plugin's table; `describe` lists it under `unclassified`, and `/slack-status` names it.
 `mark_read` runs `slack_mark_read`'s own spec the same way: it asserts `slack_mark_read`, then calls Slack's `conversations.mark` once. Its own refusals, `INPUT_INVALID` and `SCOPE_MISSING`, are in the configuration guide's [Errors](configuration.md#errors); Slack's other refusals are `UPSTREAM_ERROR` with Slack's error code.
 
 ```sh
@@ -26,7 +26,7 @@ opencode api post /api/rpc/slack.workspace.tools/mark_read -H "x-opencode-direct
 opencode api post /api/rpc/slack.workspace.tools/status -H "x-opencode-directory:$PWD" -d '{"input":{"sessionID":"ses_…","input":{}}}'
 ```
 
-`events_list` is the plugin's own read for Memory's collector. It runs `slack_events_list`'s own spec as the session and its agent: it asserts `slack_events_list`, takes the account and owner from status's `auth.test`, then reads `slack_read_channel` through OpenCode's executors, so each read's rules apply. `probe` and `thread_read` complete the source: `probe` asserts `slack_probe` and reads only `slack_read_user_profile`; `thread_read` asserts `slack_slack_read_thread`, the read it makes. Its own refusals, such as a cursor from another workspace, are the codes in the configuration guide's [Errors](configuration.md#errors); a refused read is `PERMISSION_DENIED` naming that read.
+`events_list` is the plugin's own read for a consumer's collector. It runs `slack_events_list`'s own spec as the session and its agent: it asserts `slack_events_list`, takes the account and owner from status's `auth.test`, then reads `slack_read_channel` through OpenCode's executors, so each read's rules apply. `probe` and `thread_read` complete the source: `probe` asserts `slack_probe` and reads only `slack_read_user_profile`; `thread_read` asserts `slack_slack_read_thread`, the read it makes. Its own refusals, such as a cursor from another workspace, are the codes in the configuration guide's [Errors](configuration.md#errors); a refused read is `PERMISSION_DENIED` naming that read.
 
 
 The tools RPC is registered only when the plugin is set up. With invalid options or an OpenCode version outside the supported range, OpenCode answers `rpc.unavailable`, and `/slack-status` names the problem.
@@ -45,7 +45,7 @@ Never borrow a session found through history or a list: the script would run as 
 - **A script gets the same default as the model: every tool is allowed.** At the default `access: "all"`, the plugin's block allows every known tool and the `slack_*` namespace, so a script can read and write everything the signed-in account can. To restrict a script, set the plugin option `"access": "ask-changes"` (an ask is refused, because no one can answer a prompt for a script) or `"access": "read-only"` (everything but the reads is denied), or give the script's agent or session a later rule. Only an `allow` runs; an `ask` and a `deny` are refused, with no tool call and no prompt left waiting. An agent defined only in your config gets no default rules; `/slack-status` names it.
 - OpenCode then checks the call itself, as it does for the model: the agent's rules, the session's rules, then saved approvals.
 
-**A saved "Always allow" approval does not authorize an ad-hoc script.** It lives outside the agent's and the session's rules, so the resolve refuses an `ask` even after a past approval. That is deliberate: a script's permission must be reviewable in config, not in a list of past clicks. A script's grant is a rule in the agent's or the session's config, or a Jobs run session. For a one-off that needs an approval-bound grant, use Jobs's `jobs_run_script`: the user reads the source and the tools once, and approves it.
+**A saved "Always allow" approval does not authorize an ad-hoc script.** It lives outside the agent's and the session's rules, so the resolve refuses an `ask` even after a past approval. That is deliberate: a script's permission must be reviewable in config, not in a list of past clicks. A script's grant is a rule in the agent's or the session's config.
 
 Session rules come after the agent's, so a session can narrow what its script may do. This one can read threads and channels, and only those, whatever the agent allows:
 
@@ -75,7 +75,7 @@ opencode api post /api/rpc/<id>/<method> -H "x-opencode-directory:$PWD" -d '{…
 
 Without it the call goes to the service's default location and fails `rpc.unavailable` if the plugin is not loaded there. The HTTP equivalents are the `location[directory]` query parameter and the same header. `describe` reports the `location` that answered and a `locationHint`.
 
-A location unloads after OpenCode's idle timeout. If a scheduled script gets `rpc.unavailable` from a location that was loaded before, send the call again once: the request loads the location. Jobs keeps its own location loaded.
+A location unloads after OpenCode's idle timeout. If an automation or a script gets `rpc.unavailable` from a location that was loaded before, send the call again once: the request loads the location.
 
 The tool's input is Slack's: `describe` shows each tool's schema as OpenCode lists it now.
 

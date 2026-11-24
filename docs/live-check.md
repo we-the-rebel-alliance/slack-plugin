@@ -2,7 +2,7 @@
 
 Unofficial plugin. Not affiliated with Slack.
 
-The plugin's status (`auth.test`) and `slack_mark_read` (`conversations.mark`) send the token from Slack's MCP sign-in to Slack's Web API, `https://slack.com/api/`. The unit and host tests use a fake Slack, so only a live run shows that Slack accepts that token for these two methods. `scripts/live-web-api.ts` is that run. It is manual: never part of `npm run check` or CI.
+The plugin's status (`auth.test`), `slack_mark_read` (`conversations.mark`) and `mentions_list` (`assistant.search.context`) send the token from Slack's MCP sign-in to Slack's Web API, `https://slack.com/api/`. The unit and host tests use a fake Slack, so only a live run shows that Slack accepts that token for these methods. `scripts/live-web-api.ts` is that run for the first two; it never calls `mentions_list`. It is manual: never part of `npm run check` or CI.
 
 ## What it does
 

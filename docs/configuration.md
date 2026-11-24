@@ -11,7 +11,7 @@ Every option is optional. Pass options in the object form of a `plugins` entry:
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "github:joe-broadhead/opencode-slack#v0.0.7",
+      "package": "github:we-the-rebel-alliance/slack-plugin#vX.Y.Z",
       "options": {
         "oauth": {
           "client_id": "YOUR_SLACK_CLIENT_ID",
@@ -31,7 +31,7 @@ Every option is optional. Pass options in the object form of a `plugins` entry:
 | `oauth.client_id` | Not set: the client ID saved in the `/connect` Slack app client ID entry is used | A non-empty string without spaces. The client ID is public. Find it under **Basic Information → App Credentials** in your Slack app. When set, it wins over `/connect`, and `/connect` shows no Slack app entry. |
 | `oauth.redirect_uri` | `http://localhost:8765/callback` | Either a loopback `http:` URL on host `localhost` or `127.0.0.1` with an explicit port, or an `https:` URL on any host. Both need a path, and neither may have a user name, password, query or fragment. It must exactly match a redirect URL registered in the Slack app. See [The callback: loopback or hosted](#the-callback-loopback-or-hosted). |
 | `oauth.callback_port` | Not set | A whole number from 1 to 65535: the port of OpenCode's local callback listener on `127.0.0.1`. Required with an `https:` `oauth.redirect_uri`, and refused with a loopback one, whose own port is the listener's. |
-| `oauth.scopes` | `["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:read", "im:history", "mpim:read", "mpim:history"]` | A non-empty list of unique Slack user scopes, each without spaces. Your list replaces the default list. See [Scopes](#scopes). |
+| `oauth.scopes` | `["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim"]` | A non-empty list of unique Slack user scopes, each without spaces. Your list replaces the default list. See [Scopes](#scopes). |
 | `oauth.client_secret` | Not set (public client with PKCE) | A non-empty string, and only together with `oauth.client_id`. Set it only for a Slack app that does not use PKCE, and only through `{env:NAME}`. See [Client secret](#client-secret). |
 | `oauth.auth_server_metadata_url` | Not set: OpenCode discovers Slack's authorization server | An `https:` URL of at most 2048 characters, with no user name, password or fragment. Passed to OpenCode unchanged; OpenCode uses this OAuth metadata document in place of Slack's for the whole sign-in: its `authorization_endpoint`, its `token_endpoint` (which receives the code, every refresh token and any client secret) and its `issuer`. Point it only at your host's own sign-in service, serving a copy of Slack's metadata with only `token_endpoint` changed. See [Refresh behind a hosted callback](#refresh-behind-a-hosted-callback). |
 | `allowUntestedHost` | `false` | `true` or `false`. If it is `true`, the plugin runs on an OpenCode version outside its supported range, and status keeps warning. See [Host check](#host-check). |
@@ -82,7 +82,7 @@ Behind a hosted callback, choose one:
   }
   ```
 
-  The plugin passes the address to OpenCode unchanged. OpenCode uses the document in place of Slack's for the whole sign-in: it sends the browser to its `authorization_endpoint`, sends the authorization code, the PKCE verifier, every refresh token and the client secret, if one is set, to its `token_endpoint`, and trusts its `issuer`, against which it also checks the sign-in callback when the document advertises the `iss` parameter (RFC 9207). Whoever serves it controls the Slack sign-in and receives the person's Slack tokens, so only the owner of the OpenCode configuration should set it, and only to your host's own sign-in service. See [SECURITY.md](../SECURITY.md). Every OpenCode release the plugin supports, 2.2.3 on, reads this key.
+  The plugin passes the address to OpenCode unchanged. OpenCode uses the document in place of Slack's for the whole sign-in: it sends the browser to its `authorization_endpoint`, sends the authorization code, the PKCE verifier, every refresh token and the client secret, if one is set, to its `token_endpoint`, and trusts its `issuer`, against which it also checks the sign-in callback when the document advertises the `iss` parameter (RFC 9207). Whoever serves it controls the Slack sign-in and receives the person's Slack tokens, so only the owner of the OpenCode configuration should set it, and only to your host's own sign-in service. See [SECURITY.md](../SECURITY.md). Every OpenCode release the plugin supports, 2.4.1 on, reads this key.
 
 Without `oauth.auth_server_metadata_url`, the plugin registers exactly the entry it always has.
 
@@ -146,11 +146,11 @@ Status shows the client mode as `confidential, secret set` and never shows the v
 
 ### Host check
 
-When it loads, the plugin compares the OpenCode version with its supported range, `>=2.2.3 <2.4.0`, which `package.json` declares as `opencode.host`. Every check runs on OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2, the tested releases. A later release in the range, such as 2.2.99, runs untested. Status shows the version, whether it is tested and the supported range in its `OpenCode` row, for example `2.2.5 (tested; supported range >=2.2.3 <2.4.0)`.
+When it loads, the plugin compares the OpenCode version with its supported range, `>=2.4.1 <2.5.0`, which `package.json` declares as `opencode.host`. Every check runs on OpenCode 2.4.1, the tested release. A later release in the range, such as 2.4.99, runs untested. Status shows the version, whether it is tested and the supported range in its `OpenCode` row, for example `2.4.1 (tested; supported range >=2.4.1 <2.5.0)`.
 
 - **A tested release:** the plugin sets everything up.
-- **Another release inside the range, such as 2.2.99:** the plugin sets everything up too. Status marks the version `untested` (the RPC's `host.tested` is `false`), and its state is the connection's.
-- **Outside the range, including prereleases and development builds:** the plugin registers only `/slack-status`, the TUI view and the status RPC. They show the connection `host untested` and the code `HOST_UNTESTED`, with the next step `Use OpenCode >=2.2.3 <2.4.0, or set "allowUntestedHost": true in this plugin's options to run anyway.` If an option is also invalid, they show `OPTIONS_INVALID` first.
+- **Another release inside the range, such as 2.4.99:** the plugin sets everything up too. Status marks the version `untested` (the RPC's `host.tested` is `false`), and its state is the connection's.
+- **Outside the range, including prereleases and development builds:** the plugin registers only `/slack-status`, the TUI view and the status RPC. They show the connection `host untested` and the code `HOST_UNTESTED`, with the next step `Use OpenCode >=2.4.1 <2.5.0, or set "allowUntestedHost": true in this plugin's options to run anyway.` If an option is also invalid, they show `OPTIONS_INVALID` first.
 - **Outside the range with `"allowUntestedHost": true`:** the plugin sets everything up, and status marks the version as untested.
 
 ## Create the Slack app
@@ -186,7 +186,7 @@ With a client ID, the plugin adds one MCP server named `slack`:
   "oauth": {
     "client_id": "YOUR_SLACK_CLIENT_ID",
     "redirect_uri": "http://localhost:8765/callback",
-    "scope": "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:read im:history mpim:read mpim:history"
+    "scope": "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim"
   }
 }
 ```
@@ -255,7 +255,6 @@ The option has three values, and the plugin generates its block from the tool cl
   { "action": "slack_slack_update_list_record", "resource": "*", "effect": "allow" },
   { "action": "slack_mark_read", "resource": "*", "effect": "allow" },
   { "action": "slack_mentions_list", "resource": "*", "effect": "allow" },
-  { "action": "slack_dms_list", "resource": "*", "effect": "allow" },
   { "action": "slack.read", "resource": "*", "effect": "allow" }
 ]
 ```
@@ -298,7 +297,6 @@ The option has three values, and the plugin generates its block from the tool cl
   { "action": "slack_slack_update_list_record", "resource": "*", "effect": "ask" },
   { "action": "slack_mark_read", "resource": "*", "effect": "ask" },
   { "action": "slack_mentions_list", "resource": "*", "effect": "ask" },
-  { "action": "slack_dms_list", "resource": "*", "effect": "ask" },
   { "action": "slack.read", "resource": "*", "effect": "ask" }
 ]
 ```
@@ -341,7 +339,6 @@ The option has three values, and the plugin generates its block from the tool cl
   { "action": "slack_slack_update_list_record", "resource": "*", "effect": "deny" },
   { "action": "slack_mark_read", "resource": "*", "effect": "deny" },
   { "action": "slack_mentions_list", "resource": "*", "effect": "deny" },
-  { "action": "slack_dms_list", "resource": "*", "effect": "deny" },
   { "action": "slack.read", "resource": "*", "effect": "deny" }
 ]
 ```
@@ -387,16 +384,15 @@ Slack can add tools at any time. A tool the plugin does not know follows the nam
 
 The plugin requests the scopes in `oauth.scopes`. List each one in the Slack app too, under **OAuth & Permissions → User Token Scopes** (`oauth_config.scopes.user` in a manifest). Some workspaces also need an admin to approve them.
 
-The default scopes are read-only. They cover public message and channel search (`search:read.public`), public channel history and threads (`channels:history`), public channel details and members (`channels:read`) and user profiles (`users:read`), and since 0.0.3 what the `slack.mentions` and `slack.dms` sources read: the search of private channels, direct and group messages (`search:read.private`, `search:read.im`, `search:read.mpim`) and your direct and group messages (`im:read`, `im:history`, `mpim:read`, `mpim:history`). Other tools need more scopes. Without one, a call can fail with Slack's missing-scope error.
+The default scopes are read-only. They cover public message and channel search (`search:read.public`), public channel history and threads (`channels:history`), public channel details and members (`channels:read`), user profiles (`users:read`), and what the `slack.mentions` source searches: private channels, direct messages and group direct messages (`search:read.private`, `search:read.im`, `search:read.mpim`). Other tools need more scopes. Without one, a call can fail with Slack's missing-scope error.
 
-**A sign-in from before 0.0.3 lacks the new scopes.** Add them to your Slack app (the [manifest](slack-app-manifest.json) lists every default), then sign in again (`/connect` → Slack, or `opencode mcp auth slack`). When OpenCode stored the scopes Slack granted with the credential, `/slack-status` compares them with `oauth.scopes`, names the missing ones in its Scopes row and the RPC's `missingScopes`, and its next step is to sign in again. It reads only that stored list, never the token. Until then `mentions_list` and `dms_list` answer `SCOPE_MISSING`; the rest works as before.
+**A sign-in that lacks a scope this version asks for** is named by `/slack-status`: when OpenCode stored the scopes Slack granted with the credential, status compares them with `oauth.scopes`, names the missing ones in its Scopes row and the RPC's `missingScopes`, and its next step is to add them to the app and sign in again. It reads only that stored list, never the token. Until then `mentions_list` answers `SCOPE_MISSING`; the rest works as before.
 
 Scopes per tool, from Slack's [MCP scope table](https://docs.slack.dev/ai/slack-mcp-server#oauth-scopes):
 
 | To use | Add these user scopes |
 | --- | --- |
 | Private channels, direct messages and group direct messages in search (`slack_search_public_and_private`, `mentions_list`) | `search:read.private`, `search:read.im`, `search:read.mpim` (in the defaults) |
-| Your direct and group messages (`dms_list`) | `im:read`, `im:history`, `mpim:read`, `mpim:history` (in the defaults) |
 | File search | `search:read.files` |
 | User search (`slack_search_users`) | `search:read.users` |
 | Emoji search (`slack_search_emojis`) | `emoji:read` |
@@ -465,7 +461,7 @@ events_list({ since?, cursor?, limit?, account?, source?, scope?: { channels } }
   → { plugin, source: "slack", account, owner: { id, label }, scope?, events, refused?, gap?, cursor, more, trust: "untrusted" }
 ```
 
-It is the `slack.workspace` source that `package.json`'s top-level `sources` key declares under source-contract version 1 (`github:we-the-rebel-alliance/source-contract#v0.2.0`, bundled into `dist/index.js`): kind `events`, reading `message`, the scope key `channels`, the detail read `slack.workspace.thread`, the operations `slack_read_user_profile`, `slack_read_channel` and `slack_read_thread` (the first is the identity operation, which only `probe` asserts), private, free, at most 64 KB a page, links to `*.slack.com`, and the tools RPC `slack.workspace.tools` with the probe action `slack_probe`. A consumer (Memory, jelly, Artifacts) reads that declaration from the installed package and reads under the person's grant. `npm run check` runs the contract's conformance kit over `events_list`, `probe` and `thread_read`, with Slack's answers from `test/fixtures/conformance.json` and no live call, and writes its report to `reports/conformance-report.json` for the release.
+It is the `slack.workspace` source that `package.json`'s top-level `sources` key declares (the source contract is bundled into `dist/index.js`): kind `events`, reading `message`, the scope key `channels`, the detail read `slack.workspace.thread`, the operations `slack_read_user_profile`, `slack_read_channel` and `slack_read_thread` (the first is the identity operation, which only `probe` asserts), private, free, at most 64 KB a page, links to `*.slack.com`, and the tools RPC `slack.workspace.tools` with the probe action `slack_probe`. A consumer reads that declaration from the installed package and reads under the person's grant. `npm run check` runs the contract's conformance kit over `events_list`, `probe` and `thread_read`, with Slack's answers from `test/fixtures/conformance.json` and no live call, and writes its report to `reports/conformance-report.json` for the release.
 
 - **What it lists**, oldest first: the messages posted in the conversations `scope.channels` names, read one at a time with `slack_read_channel` and `oldest`. With `events.channels` set, only the scope's conversations it also lists are read, so a scope never widens the option; without a scope, the option's conversations are read. A scope is at most 16 ids, and any key but `channels` is `INPUT_INVALID`. It never uses the private search, never reads a file, and calls nothing that asks under the default rules. A thread's replies are listed only when Slack shows them in the channel (sent to the channel too); a channel read does not include the rest, which `thread_read` reads. With no channel to read, it lists nothing and says so.
 - **Refused**: a message whose text holds a secret (source-contract's screening: an API key, a token, a password assignment) is left out for good and named in `refused[]` with the reason `secret`, never its text. The cursor moves past it.
@@ -473,7 +469,7 @@ It is the `slack.workspace` source that `package.json`'s top-level `sources` key
 - **An event**: kind `message`, `external_id` `<channel id>:<ts>`, `occurred_at` from the ts, thread `slack-thread:<channel id>:<thread ts>` for a thread's parent and its replies, the author as `slack:<user id>` with their name, the first line as the title, the text (at most 4,096 characters), the permalink, and the labels `channel`, `group` or `dm`, `channel:<id>`, and `thread-parent` or `thread-reply`. Slack's own permalink is kept; otherwise one is built from the workspace's address that `auth.test` names, and none for a user id.
 - **Account and owner**: status's, from Slack's `auth.test` (one call per sign-in): `account` is the workspace's team id, and `owner` the signed-in user as `slack:<user id>`, labelled with the name `auth.test` gives. Without them the call is `UNAVAILABLE`, or status's own code while Slack cannot be called. Memory compares the owner with the person it collects for. `account` and `source` are optional inputs: another workspace is `ACCOUNT_UNKNOWN`, another source `SOURCE_UNKNOWN`.
 - **Reading Slack's answer**: Slack's tools answer in Markdown text. The plugin reads structured JSON when Slack gives it, and otherwise the labelled lines Slack writes for each message (`From`, `Message TS` or `Message_ts`, `Thread TS`, `Reply count`, `Permalink`, `Text`), and the next page's cursor. An answer with message timestamps it cannot read is `UPSTREAM_UNREADABLE`, never an empty page.
-- **Cursor**: opaque, at most 1,024 characters: source-contract's version 2 cursor, bound to this plugin, the source, the workspace and the scope, so another workspace's or scope's cursor is `CURSOR_INVALID`; pass it back with the same scope. It holds each conversation's last listed ts. A cursor from before source-contract (version 1) is read once, for a call without a scope and the same workspace and user. A cursor wins over `since`; without either, or for a conversation added later, the listing starts 24 hours ago. An older cursor lists the same events again. A cursor more than 90 days old reads on from 90 days ago, and the page says so with `gap: { reason: "expired", since }`: Slack's free plan hides older messages, and no call could read that much.
+- **Cursor**: opaque, at most 1,024 characters: the source contract's bound cursor, tied to this plugin, the source, the workspace and the scope, so another workspace's or scope's cursor is `CURSOR_INVALID`; pass it back with the same scope. It holds each conversation's last listed ts. A cursor wins over `since`; without either, or for a conversation added later, the listing starts 24 hours ago. An older cursor lists the same events again. A cursor more than 90 days old reads on from 90 days ago, and the page says so with `gap: { reason: "expired", since }`: Slack's free plan hides older messages, and no call could read that much.
 - **Limits**: `limit` is 1 to 500 (100 by default); a result stops early, with `more: true`, rather than pass 64 KB, the source's `maxBytes` and the tools RPC's cap. A conversation with more than 5 pages of 100 new messages is read in halves of its time window, oldest first, with `more: true`; one that does not fit in 30 reads is `TOO_MANY_MESSAGES`, never a skip.
 - **Permissions**: it asserts `slack_events_list`, then each read goes through OpenCode's own executor with its own rules. Every result carries `trust: "untrusted"`: other people wrote the messages.
 
@@ -488,22 +484,9 @@ mentions_list({ since?, cursor?, limit?, account?, source?: "mentions" })
 
 It asserts `slack_mentions_list`, then searches with Slack's `assistant.search.context` (newest first, at most 5 pages of 20 after the cursor; a window with more is `TOO_MANY_MESSAGES`), asserting `slack.read` on `<workspace>:assistant.search.context` first. A message you wrote is left out. Each event carries the thread it is in, the labels `mention`, `channel`, `group` or `dm`, `channel:<id>` and `thread-reply`, and Slack's permalink. Its cursor is bound to the workspace; a cursor more than 90 days old reads on with `gap`.
 
-### Direct messages
-
-`dms_list` (the tools RPC method; the `slack.dms` source, a snapshot) answers your direct and group messages, newest first, as source-contract's `inbox` output:
-
-```text
-dms_list({ source?: "dms", account?, since?, limit? })
-  → { source: "dms", account, data: { unread, unit, label, items: [{ id, url?, title, from?, preview?, at, count?, important }] }, asOf, trust: "untrusted" }
-```
-
-It asserts `slack_dms_list`, then lists your conversations with `users.conversations` (at most 5 pages of 200), reads only the `limit` most recently updated (Slack marks some dormant; those come last) with `conversations.history` (the latest message) and `conversations.info` (the read state), so a snapshot makes at most about 5 + 2 × `limit` Tier 3 calls plus one per group message and one per name, the members of a group message with `conversations.members`, and names with `users.info`, each after asserting `slack.read` on `<workspace>:<method>`. `title` is who the conversation is with, `from` who wrote the latest message, `preview` its first 200 characters, and `important` whether it is unread (`count` is Slack's unread count when it gives one). A latest message that holds a secret shows no preview. A conversation Slack will not open is left out. `limit` is 1 to 30 (20 by default); `since` keeps conversations whose latest message is at or after it (a consumer may pass a relative time, which source-contract resolves).
-
-Both read Slack's Web API through the plugin's one client, rate-limited reads waiting at most twice for at most 30 seconds, then `RATE_LIMITED`. Both answer at `access: "all"`, ask at `"ask-changes"` and are denied at `"read-only"`, like the private search.
-
 ### Probe, thread_read and channels_list
 
-Two tools RPC methods complete the source; neither is a Code Mode tool.
+Three tools RPC methods complete the source; none is a Code Mode tool.
 
 ```text
 probe({ source?, account? })
@@ -512,7 +495,7 @@ thread_read({ account?, scope: { channels }, fields: { thread } })
   → a page of the thread's messages, as events_list's, oldest first
 ```
 
-- **probe** answers for any of the three sources (`source`: `slack`, `mentions` or `dms`; `slack` by default). It asserts `slack_probe` (allowed at every `access` value), then reads the signed-in user's own profile with `slack_read_user_profile`, every source's identity operation. The account, the owner's id and the owner's label are `auth.test`'s, exactly as every page and snapshot names them; the profile must name the same user, or the probe is `UNAVAILABLE`. It reads no message.
+- **probe** answers for either source (`source`: `slack` or `mentions`; `slack` by default). It asserts `slack_probe` (allowed at every `access` value), then reads the signed-in user's own profile with `slack_read_user_profile`, every source's identity operation. The account, the owner's id and the owner's label are `auth.test`'s, exactly as every page names them; the profile must name the same user, or the probe is `UNAVAILABLE`. It reads no message.
 - **channels_list** is `slack.workspace`'s `scope.suggest`: at consent, a consumer lists your conversations with it, `{ options: [{ id, label }] }`, at most 64. It asserts `slack_channels_list` (allowed at every `access`), then reads `slack_list_user_channels` (all four conversation types, at most 5 pages), Slack's JSON when it gives it, else Slack's Markdown layout only: each `###` heading with its own `ID:` line right after it names an option, and the quoted cursor on the last `Pagination:` line is the next page's. A Purpose, a Topic or any other free text never names an option or a cursor, and a cursor that repeats ends the list.
 - **thread_read** is the source's detail read, `slack.workspace.thread`: it takes a listed event's own `thread` field (`slack-thread:<channel id>:<ts>`) and reads that thread with `slack_read_thread`, at most 5 pages of 100. It asserts `slack_slack_read_thread`, one of the source's operations, so it runs under the source's own grant. A thread whose channel is not among the confirmed `scope.channels` (and `events.channels`, when set) is `PERMISSION_DENIED`, before any read. Its page has a cursor bound to the thread, which `events_list` refuses.
 
@@ -545,11 +528,11 @@ Every error the plugin raises reads `CODE: What happened. Next step: What to do.
 | `SERVER_DISABLED` | disabled | Enable slack in /mcps. |
 | `SERVER_NAME_IN_USE` | conflict | Remove mcp.servers.slack from your OpenCode config. |
 | `OPTIONS_INVALID` | not configured | See [Validation errors](#validation-errors). |
-| `HOST_UNTESTED` | host untested | Use OpenCode >=2.2.3 <2.4.0, or set "allowUntestedHost": true in this plugin's options to run anyway. |
+| `HOST_UNTESTED` | host untested | Use OpenCode >=2.4.1 <2.5.0, or set "allowUntestedHost": true in this plugin's options to run anyway. |
 | none: a shadowed skill | connected | Move or rename the skill at `<path>`, so that this plugin's slack-search skill loads, then run opencode reload. |
 | none: agents without default rules | connected | Put the default rules shown by /slack-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Slack tools. |
 | `STATUS_UNAVAILABLE` | none: status itself failed | Run /slack-status again in a moment (in the dialog: press r to retry). |
-| `SKILLS_INVALID` | none: the plugin does not load | Reinstall the plugin: opencode plugin remove github:joe-broadhead/opencode-slack#v0.0.7, then opencode plugin add github:joe-broadhead/opencode-slack#v0.0.7, then opencode reload. A bundled skill is missing or has invalid frontmatter. |
+| `SKILLS_INVALID` | none: the plugin does not load | Reinstall the plugin: opencode plugin remove github:we-the-rebel-alliance/slack-plugin#vX.Y.Z, then opencode plugin add the same tag, then opencode reload. A bundled skill is missing or has invalid frontmatter. |
 | `INPUT_INVALID` | none: `slack_events_list` | Pass since, cursor, limit, account or source as events_list's schema describes them. |
 | `SOURCE_UNKNOWN` | none: `slack_events_list` | Leave "source" out, or pass "slack". |
 | `CURSOR_INVALID` | none: `slack_events_list` | Call events_list without a cursor, with since, to start again. |
@@ -564,11 +547,11 @@ Every error the plugin raises reads `CODE: What happened. Next step: What to do.
 | `UPSTREAM_ERROR` | none: `slack_events_list`, Slack refused a read (the message names the channel) | Check that the channel id in events.channels is one you can read, then call events_list again with the same cursor. |
 | `UPSTREAM_UNREADABLE` | none: `slack_events_list`, Slack answered in a shape it does not read | Call the tool the message names directly to see Slack's answer, and run /slack-status. |
 | `INPUT_INVALID` | none: `slack_mark_read` | Pass channel_id and ts as mark_read's schema describes them. |
-| `SCOPE_MISSING` | none: `slack_mark_read`, `mentions_list` or `dms_list` | Add the scope the message names to the Slack app's user scopes and to the plugin's oauth.scopes, then sign in to Slack again. |
+| `SCOPE_MISSING` | none: `slack_mark_read` or `mentions_list` | Add the scope the message names to the Slack app's user scopes and to the plugin's oauth.scopes, then sign in to Slack again. |
 | `UPSTREAM_ERROR` | none: `slack_mark_read`, Slack refused conversations.mark (the message holds Slack's error code) | Check channel_id and ts, and run /slack-status if it keeps failing. |
 | `INPUT_INVALID` | none: the tools RPC's `status` method | Pass an empty object as the input. |
 | `FEATURE_NOT_ENABLED` | none: `mentions_list`, Slack refused Real-time Search (`feature_not_enabled`) | Use a Slack app that is internal to your workspace or listed in the Slack Marketplace, signed in as a full member rather than a guest, then sign in again. |
-| `RATE_LIMITED` | none: `mentions_list` or `dms_list`, Slack kept rate-limiting a Web API read | Call it again after the time the message names. |
+| `RATE_LIMITED` | none: `mentions_list`, Slack kept rate-limiting a Web API read | Call it again after the time the message names. |
 | `UNAVAILABLE` | none: `slack_events_list`, `probe` or `thread_read`, Slack's auth.test named no workspace and user | Run /slack-status; once it shows the Account, call the method again. |
 | `PERMISSION_DENIED` | none: `thread_read`, the thread's channel is outside the confirmed scope | Confirm that channel for this source, or read only threads of the channels already confirmed. |
 | `TOOL_UNAVAILABLE` | none: `slack_events_list`, OpenCode does not list a read it needs, or `slack` is your own server | Wait a few seconds, then run /slack-status and follow its next step. While the server cannot be called, `slack_events_list` gives status's own code and next step instead. |
