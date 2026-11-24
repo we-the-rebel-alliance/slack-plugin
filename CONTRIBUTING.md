@@ -163,8 +163,9 @@ The release kit is these files, the same in every plugin: `scripts/release-rules
 `scripts/tested-hosts.mjs`, `scripts/check-release-plugin-add.sh`, `scripts/check-drift.mjs`, `scripts/capture-tools.mjs`,
 `scripts/release-kit.test.mjs`, `scripts/drift-kit.test.mjs` and `.github/workflows/release.yml`. `scripts/check-copies.mjs`
 pins each of the scripts whole by its sha256, so a plugin whose copy differs from the family's fails `npm run check`:
-change the kit in every plugin at once, with the new hashes. Do not re-run the older `apply-release-kit.mjs`: it writes
-back the kit that could release only `v0.0.0`.
+change the kit in every plugin at once, with the new hashes. This repository's copies were edited for the greenfield
+text (no app names, no deleted-docs expectation) and pin their own hashes; phase 4b propagates or replaces them. Do not
+re-run the older `apply-release-kit.mjs`: it writes back the kit that could release only `v0.0.0`.
 
 Each release has its own tag, and a Git install does not update by itself. To move to a newer release, remove the old entry with `opencode plugin remove github:we-the-rebel-alliance/slack-plugin#v<old version>`, then add the new tag with `opencode plugin add github:we-the-rebel-alliance/slack-plugin#v<version>`.
 
