@@ -14,21 +14,14 @@ import { SERVER } from "./defaults.js"
 export const SLACK_API_URL = "https://slack.com/api/"
 
 /**
- * The only Web API methods the plugin calls: who signed in (`auth.test`, for status and the sources' account), marking a
- * conversation read (`conversations.mark`, for `mark_read`, the one write), the search for the user's mentions
- * (`assistant.search.context`, the `slack.mentions` source), and the reads of the user's direct and group messages
- * (`users.conversations`, `conversations.info`, `conversations.history`, `conversations.members` and `users.info`, the
- * `slack.dms` source). Every method but `conversations.mark` only reads.
+ * The only Web API methods the plugin calls: who signed in (`auth.test`, for status and the source's account), marking a
+ * conversation read (`conversations.mark`, for `mark_read`, the one write), and the search for the user's mentions
+ * (`assistant.search.context`, the `slack.mentions` source). Every method but `conversations.mark` only reads.
  */
 export const SLACK_API_METHODS = [
   "auth.test",
   "conversations.mark",
   "assistant.search.context",
-  "users.conversations",
-  "conversations.info",
-  "conversations.history",
-  "conversations.members",
-  "users.info",
 ] as const
 export type SlackApiMethod = (typeof SLACK_API_METHODS)[number]
 

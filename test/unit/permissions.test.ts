@@ -21,7 +21,6 @@ describe("defaultRules", () => {
       ...OTHER.map((tool) => allow(`slack_${tool}`)),
       allow("slack_mark_read"),
       allow("slack_mentions_list"),
-      allow("slack_dms_list"),
       allow("slack.read"),
     ])
     expect(defaultRules().every((rule) => rule.effect === "allow")).toBe(true)
@@ -32,7 +31,7 @@ describe("defaultRules", () => {
     expect(rules[0]).toEqual(ask("slack_*"))
     expect(rules.slice(1, 1 + READ_TOOLS.length)).toEqual(READ_TOOLS.map((tool) => allow(`slack_${tool}`)))
     expect(rules.slice(1 + READ_TOOLS.length, 5 + READ_TOOLS.length)).toEqual([allow("slack_events_list"), allow("slack_probe"), allow("slack_channels_list"), allow("slack_status")])
-    expect(rules.slice(5 + READ_TOOLS.length)).toEqual([...[...OTHER, "mark_read", "mentions_list", "dms_list"].map((tool) => ask(`slack_${tool}`)), ask("slack.read")])
+    expect(rules.slice(5 + READ_TOOLS.length)).toEqual([...[...OTHER, "mark_read", "mentions_list"].map((tool) => ask(`slack_${tool}`)), ask("slack.read")])
   })
 
   test("at read-only, allows each read and denies the rest, the namespace included", () => {
@@ -40,7 +39,7 @@ describe("defaultRules", () => {
     expect(rules[0]).toEqual(deny("slack_*"))
     expect(rules.slice(1, 1 + READ_TOOLS.length)).toEqual(READ_TOOLS.map((tool) => allow(`slack_${tool}`)))
     expect(rules.slice(1 + READ_TOOLS.length, 5 + READ_TOOLS.length)).toEqual([allow("slack_events_list"), allow("slack_probe"), allow("slack_channels_list"), allow("slack_status")])
-    expect(rules.slice(5 + READ_TOOLS.length)).toEqual([...[...OTHER, "mark_read", "mentions_list", "dms_list"].map((tool) => deny(`slack_${tool}`)), deny("slack.read")])
+    expect(rules.slice(5 + READ_TOOLS.length)).toEqual([...[...OTHER, "mark_read", "mentions_list"].map((tool) => deny(`slack_${tool}`)), deny("slack.read")])
   })
 
   test("gives a tool Slack adds later the value's effect, and always runs the reads", () => {
@@ -52,7 +51,7 @@ describe("defaultRules", () => {
 
   test("names every known tool, and the plugin's own methods, exactly once, after its namespace rule", () => {
     const named = defaultRules("all").slice(1).map((rule) => rule.action)
-    expect(named.sort()).toEqual([...[...Object.keys(KNOWN_TOOLS), "events_list", "probe", "channels_list", "status", "mark_read", "mentions_list", "dms_list"].map((tool) => `slack_${tool}`), "slack.read"].sort())
+    expect(named.sort()).toEqual([...[...Object.keys(KNOWN_TOOLS), "events_list", "probe", "channels_list", "status", "mark_read", "mentions_list"].map((tool) => `slack_${tool}`), "slack.read"].sort())
   })
 })
 

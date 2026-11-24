@@ -28,7 +28,7 @@ interface Call {
 function status(overrides: Partial<StatusInput> = {}): Status {
   return buildStatus({
     version: "9.9.9",
-    hostVersion: "2.2.3",
+    hostVersion: "2.4.1",
     hostSupported: true,
     hostTested: true,
     parsed: parseOptions({ oauth: { client_id: "TEST_CLIENT_ID" } }),
@@ -45,7 +45,7 @@ function status(overrides: Partial<StatusInput> = {}): Status {
 }
 
 // Every event that can change the dialog.
-const EVENTS = ["server.connected", "mcp.status.changed", "agent.updated", "integration.updated", "credential.updated", "credential.switched"]
+const EVENTS = ["server.connected", "mcp.status.changed", "experimental.mcp.event", "agent.updated", "integration.updated", "credential.updated", "credential.switched"]
 
 const STATES: readonly (readonly [string, Status])[] = [
   ["connected", status({ tools: [{ name: "slack_search_public", options: { namespace: "slack" } }, { name: "slack_brand_new", options: { namespace: "slack" } }] })],
@@ -265,19 +265,19 @@ describe("the dialog", () => {
     expect(await frame()).toContain("Connection connected")
   })
 
-  test("a connected server with no tools yet says to press r, and never polls", async () => {
+  test("a connected server with no tools yet says OpenCode lists them just after it connects, and never polls", async () => {
     const fake = fakeTui()
     await activate(fake)
     const frame = await open(fake)
     fake.calls[0]!.resolve(status())
-    expect(await frame()).toContain("Tools 0 read, 0 private search, 0 file, 0 write. OpenCode lists Slack's tools just after it connects: press r to refresh.")
+    expect(await frame()).toContain("Tools 0 read, 0 private search, 0 file, 0 write. OpenCode lists Slack's tools just after it connects.")
     await Bun.sleep(1_200)
     expect(fake.calls).toHaveLength(1)
     await fake.command("r")!.run()
     fake.calls[1]!.resolve(STATES[0]![1])
     const text = await frame()
     expect(text).toContain("unknown (new tools run too): slack_brand_new")
-    expect(text).not.toContain("press r to refresh.")
+    expect(text).not.toContain("OpenCode lists Slack's tools just after it connects.")
   })
 
   test("ignores a stale response and aborts the request it replaced", async () => {

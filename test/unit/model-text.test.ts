@@ -30,7 +30,7 @@ const atAll = (text: string) =>
 describe("the model-facing text at access all", () => {
   const all = {
     "the Code Mode namespace": NAMESPACE_DESCRIPTION,
-    "the Jelly summary": (JSON.parse(read("package.json")) as { jelly?: { summary?: string } }).jelly?.summary ?? "",
+    "the declaration summary": (JSON.parse(read("package.json")) as { jelly?: { summary?: string } }).jelly?.summary ?? "",
     ...Object.fromEntries(readdirSync(join(ROOT, "skills")).map((name) => [`skills/${name}/SKILL.md`, read(`skills/${name}/SKILL.md`)] as const)),
   }
 
@@ -38,10 +38,14 @@ describe("the model-facing text at access all", () => {
     for (const [claim, pattern] of STALE) expect({ claim, hit: pattern.exec(atAll(text))?.[0] ?? null }).toEqual({ claim, hit: null })
   })
 
-  test("says what the default is, and that the access option decides what asks", () => {
-    expect(NAMESPACE_DESCRIPTION).toContain("Every tool runs at the default `access` `all`")
-    expect(NAMESPACE_DESCRIPTION).toContain("`ask-changes` asks")
-    expect(NAMESPACE_DESCRIPTION).toContain("`read-only` denies")
+  test("the skill carries the access levels the fixed namespace line leaves out", () => {
+    const skill = read("skills/slack-search/SKILL.md")
+    expect(skill).toContain("## Access levels")
+    expect(skill).toContain('At `"ask-changes"` OpenCode asks before writes and sends, the private-channel search, file reads')
+    expect(skill).toContain('at `"read-only"` it denies them and keeps the reads')
+    // The namespace line is the fixed 257-character text from the audit: it carries no access claim at all.
+    expect(NAMESPACE_DESCRIPTION).not.toContain("ask-changes")
+    expect(NAMESPACE_DESCRIPTION).not.toContain("read-only")
   })
 
   test("does not state that every tool is allowed as a fact about every access value", () => {

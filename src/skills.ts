@@ -11,7 +11,7 @@ const SKILLS = ["slack-search"] as const
  * The one next step for a broken install: reinstall this release's tag. A Git install is removed by its installed spec
  * and added again.
  */
-const REINSTALL = `Reinstall the plugin: run opencode plugin remove github:joe-broadhead/opencode-slack#v${VERSION}, then opencode plugin add github:joe-broadhead/opencode-slack#v${VERSION}, then opencode reload.`
+const REINSTALL = `Reinstall the plugin: run opencode plugin remove github:we-the-rebel-alliance/slack-plugin#v${VERSION}, then opencode plugin add github:we-the-rebel-alliance/slack-plugin#v${VERSION}, then opencode reload.`
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/
 

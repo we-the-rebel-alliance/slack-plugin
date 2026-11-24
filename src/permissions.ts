@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode/plugin"
 import type { Access } from "./options.js"
 import { SERVER } from "./defaults.js"
-import { CHANNELS_LIST, DMS_LIST, EVENTS_LIST, KNOWN_TOOLS, MARK_READ, MENTIONS_LIST, PROBE, STATUS_METHOD, WEB_READ } from "./tools.js"
+import { CHANNELS_LIST, EVENTS_LIST, KNOWN_TOOLS, MARK_READ, MENTIONS_LIST, PROBE, STATUS_METHOD, WEB_READ } from "./tools.js"
 
 type AgentEditor = Parameters<Parameters<Plugin.Context["agent"]["transform"]>[0]>[0]
 
@@ -30,7 +30,7 @@ export function defaultRules(access: Access = "all"): Rule[] {
   return [
     rule(`${SERVER}_*`, other),
     ...READ_LIKE.map((tool) => rule(`${SERVER}_${tool}`, "allow")),
-    // The plugin's own events_list only reads, and Memory's collector runs it with no one there.
+    // The plugin's own events_list only reads, and a consumer's collector runs it with no one there.
     rule(`${SERVER}_${EVENTS_LIST}`, "allow"),
     // Its probe names the signed-in workspace and user and reads no content.
     rule(`${SERVER}_${PROBE}`, "allow"),
@@ -41,10 +41,9 @@ export function defaultRules(access: Access = "all"): Rule[] {
     ...OTHER_TOOLS.map((tool) => rule(`${SERVER}_${tool}`, other)),
     // The plugin's own mark_read is a write: it changes the user's read state in Slack.
     rule(`${SERVER}_${MARK_READ}`, other),
-    // Its mentions_list and dms_list read your mentions and direct messages, private channels included, as the
-    // private search does; slack.read is each Web API read they make (on <workspace>:<method>).
+    // Its mentions_list reads your mentions in public and private channels and in direct and group messages, as the
+    // private search does; slack.read is each Web API read it makes (on <workspace>:<method>).
     rule(`${SERVER}_${MENTIONS_LIST}`, other),
-    rule(`${SERVER}_${DMS_LIST}`, other),
     rule(`${SERVER}.${WEB_READ}`, other),
   ]
 }
@@ -69,7 +68,7 @@ function hasDefaultRules(permissions: readonly Rule[], access: Access = "all"): 
  * allow keep their stricter policy. Replaying the transform leaves agents unchanged, also when another plugin has
  * since inserted its own block between the base allow and this one.
  *
- * Verified on OpenCode 2.2.3. Agents created after plugins run, such as agents defined only in user config, get no
+ * Verified on OpenCode 2.4.1. Agents created after plugins run, such as agents defined only in user config, get no
  * rules; status names them as unguarded and shows these rules for each agent's own permissions.
  */
 export function insertDefaultRules(editor: AgentEditor, access: Access = "all"): void {

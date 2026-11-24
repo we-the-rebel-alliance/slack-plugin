@@ -1,4 +1,4 @@
-// package.json's `sources` (source-contract version 1): the declaration as a consumer and the kit read it, the kit's
+// package.json's `sources` (the source contract): the declaration as a consumer and the kit read it, the kit's
 // report over the plugin's own reads (test/support/conformance.ts, offline), and the refusals of probe and thread_read
 // the kit does not reach. Every id below is invented, or the placeholder U00CURRENTUSER.
 import { describe, expect, test } from "bun:test"
@@ -21,21 +21,19 @@ const PROFILE = { text: FIXTURE.profile }
 const call = { sessionID: "ses_1", agent: "build", messageID: "msg_1", id: "call_1", signal: new AbortController().signal, progress: async () => {} }
 
 describe("package.json's sources", () => {
-  test("is three sources, read as a consumer reads an installed plugin, and passes Memory's schema and the kit's rules", () => {
+  test("is two sources, read as a consumer reads an installed plugin, and passes the schema and the kit's rules", () => {
     const descriptor = installed()
-    expect(descriptor.package).toBe("@joe-broadhead/opencode-slack")
+    expect(descriptor.package).toBe("@we-the-rebel-alliance/slack-plugin")
     expect(descriptor.hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     const sources = declaredSources()
     expect(sources.items.map((item) => [item.id, item.kind, item.tool])).toEqual([
       ["slack.workspace", "events", "events_list"],
       ["slack.mentions", "events", "mentions_list"],
-      ["slack.dms", "snapshot", "dms_list"],
     ])
     // Every source reads under its own operations: the Web API methods its reads call, as `<workspace>:<method>`.
     expect(Object.fromEntries(sources.items.map((item) => [item.id, item.permission.operations]))).toEqual({
       "slack.workspace": ["slack_read_user_profile", "slack_read_channel", "slack_read_thread"],
       "slack.mentions": ["slack_read_user_profile", "assistant.search.context"],
-      "slack.dms": ["slack_read_user_profile", "users.conversations", "conversations.info", "conversations.history", "conversations.members", "users.info"],
     })
     for (const item of sources.items) expect({ id: item.id, identity: item.permission.identity, private: item.private, cost: item.cost }).toEqual({ id: item.id, identity: ["slack_read_user_profile"], private: true, cost: { class: "free" } })
     expect(() => assertDeclaration(sources, { tools: declaredTools() })).not.toThrow()
@@ -60,12 +58,11 @@ describe("package.json's sources", () => {
   test("passes the conformance kit for every source, with every check that applies run", async () => {
     const reports = await conformanceReports()
     expect(reports.map((report) => ({ source: report.source, problems: report.problems, incomplete: report.incomplete, ok: report.ok }))).toEqual(
-      ["slack.workspace", "slack.mentions", "slack.dms"].map((source) => ({ source, problems: [], incomplete: false, ok: true })),
+      ["slack.workspace", "slack.mentions"].map((source) => ({ source, problems: [], incomplete: false, ok: true })),
     )
     const checks = (index: number) => Object.fromEntries(reports[index]!.checks.map((check) => [check.name, check.notApplicable ? "n/a" : check.ran ? "ran" : "missing"]))
     expect(checks(0)).toMatchObject({ "page-result": "ran", "gap-and-cursor-expired": "ran", "refused-is-final": "ran", probe: "ran", details: "ran", suggest: "ran", "unused-grants": "ran", "failed-holds-cursor": "n/a" })
     expect(checks(1)).toMatchObject({ "page-result": "ran", "gap-and-cursor-expired": "ran", "refused-is-final": "ran", probe: "ran", "unused-grants": "ran", "failed-holds-cursor": "n/a" })
-    expect(checks(2)).toMatchObject({ probe: "ran", "identity-grants": "ran", "unused-grants": "ran", "page-result": "n/a" })
   })
 })
 
@@ -76,7 +73,7 @@ describe("probe", () => {
     const answer = await slackProbe(read, WHO, {})
     // The label is auth.test's, as on every page and snapshot; the profile only confirms the user.
     expect(answer).toEqual({ source: "slack", account: "T0EXAMPLE01", owner: { id: "slack:U00CURRENTUSER", label: "pilot.owner" }, trust: "untrusted" })
-    expect((await slackProbe(read, WHO, { source: "dms" })).source).toBe("dms")
+    expect((await slackProbe(read, WHO, { source: "mentions" })).source).toBe("mentions")
     reads.length = 1
     expect(probeResultProblems(answer, { source: "slack", account: "T0EXAMPLE01" })).toEqual([])
     expect(reads).toEqual(["slack_read_user_profile"])
@@ -117,9 +114,9 @@ describe("probe, on the profile as Slack's MCP wraps it ({ result: <Markdown> })
       status: async () => ({ state: "connected" }) as unknown as Status,
     } as unknown as EventsToolOptions)
 
-  test("names the auth.test owner for every source that binds through it, mentions and dms included", async () => {
+  test("names the auth.test owner for every source that binds through it, mentions included", async () => {
     const method = methodFor(SHAPES.profile)
-    for (const source of ["mentions", "dms", "slack"]) {
+    for (const source of ["mentions", "slack"]) {
       expect(await method.run({ source }, call)).toEqual({ source, account: "T0EXAMPLE01", owner: { id: "slack:U00CURRENTUSER", label: "pilot.owner" }, trust: "untrusted" })
     }
   })
@@ -140,7 +137,7 @@ describe("thread_read", () => {
 
   test("reads the event's thread inside the confirmed scope as a page bound to the thread", async () => {
     const page = await slackThread(answer, WHO, [], { account: WHO.account, scope: { channels: [CHANNEL] }, fields: { thread: THREAD } })
-    expect(page).toMatchObject({ plugin: "@joe-broadhead/opencode-slack", source: "slack", account: "T0EXAMPLE01", scope: { channels: [CHANNEL] }, more: false })
+    expect(page).toMatchObject({ plugin: "@we-the-rebel-alliance/slack-plugin", source: "slack", account: "T0EXAMPLE01", scope: { channels: [CHANNEL] }, more: false })
     expect(page.events.map((event) => [event.external_id, event.thread])).toEqual([[`${CHANNEL}:1794477600.000100`, THREAD]])
     expect(page.cursor.length).toBeGreaterThan(0)
   })

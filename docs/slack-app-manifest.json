@@ -11,14 +11,15 @@
       "user": [
         "channels:history",
         "channels:read",
+        "groups:read",
+        "im:read",
+        "mpim:read",
         "search:read.public",
         "users:read",
         "search:read.private",
         "search:read.im",
         "search:read.mpim",
-        "im:read",
         "im:history",
-        "mpim:read",
         "mpim:history"
       ]
     },

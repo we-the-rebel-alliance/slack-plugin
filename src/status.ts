@@ -103,7 +103,7 @@ export const UNAVAILABLE = "STATUS_UNAVAILABLE: Slack status is unavailable. Nex
 const asksBeforeOf = (access: Access): readonly string[] => {
   if (access === "all") return []
   const asking = [
-    "searching private channels, reading files, and the plugin's mentions_list and dms_list (your mentions and direct messages)",
+    "searching private channels, reading files, and the plugin's mentions_list (your mentions in private channels and direct messages)",
     "writes: messages, drafts, schedules, reactions, canvases, lists, new conversations and file uploads",
     "Slack tools this plugin does not know yet",
   ]

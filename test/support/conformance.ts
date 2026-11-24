@@ -1,5 +1,5 @@
-// source-contract's conformance kit, run over this plugin's own reads for each of its three sources (events_list,
-// thread_read and channels_list; mentions_list; dms_list; and probe for each), as setup registers them, against Slack's
+// source-contract's conformance kit, run over this plugin's own reads for each of its two sources (events_list,
+// thread_read and channels_list; mentions_list; and probe for each), as setup registers them, against Slack's
 // answers from test/fixtures/conformance.json. No live call is made. Each read runs in
 // the kit's recording permission: the plugin's own asserts go to it, and so does every Slack tool the fake host's
 // executor runs (`slack_<tool>`, as OpenCode's executor asserts it), so declared must equal asserted.
@@ -15,7 +15,6 @@ import { METHODS, type ToolCall } from "../../src/host/tools-rpc.js"
 import { identityOf } from "../../src/identity.js"
 import { markReadMethod } from "../../src/mark-read.js"
 import { channelsMethod, probeMethod, threadMethod } from "../../src/source.js"
-import { dmsMethod } from "../../src/dms.js"
 import { mentionsMethod } from "../../src/mentions.js"
 import type { SlackApi, SlackApiMethod } from "../../src/slack-api.js"
 import type { WebReadOptions } from "../../src/web-reads.js"
@@ -113,8 +112,8 @@ function sourceOptions(fixture: Fixture, context: SessionContext): EventsToolOpt
 }
 
 /**
- * Slack's Web API as the fixture records it, for the slack.mentions and slack.dms sources: the search filtered by its
- * `after`, and every other method's answer by the conversation or user it names. A recorded `error` is Slack's refusal.
+ * Slack's Web API as the fixture records it, for the slack.mentions source: the search filtered by its `after`. A
+ * recorded `error` is Slack's refusal.
  */
 export function fakeApi(fixture: Fixture, calls: string[] = []): SlackApi {
   const answer = (method: SlackApiMethod, params: Readonly<Record<string, string>>): Record<string, unknown> => {
@@ -124,9 +123,8 @@ export function fakeApi(fixture: Fixture, calls: string[] = []): SlackApi {
       const messages = (recorded as { message_ts: string }[]).filter((item) => Number(item.message_ts) > after)
       return { ok: true, results: { messages }, response_metadata: { next_cursor: "" } }
     }
-    const keyed = recorded as Record<string, unknown>
-    const key = params["channel"] ?? params["user"]
-    return (key === undefined ? keyed : (keyed[key] ?? { ok: false, error: "channel_not_found" })) as Record<string, unknown>
+    // The search is the only recorded method now; keep an answer for a method the fixture does not record.
+    return recorded as Record<string, unknown>
   }
   return {
     credential: async () => "crd_conformance",
@@ -157,7 +155,6 @@ export function declaredTools(): ToolDeclaration[] {
     threadMethod(options, PAGE_OUTPUT),
     channelsMethod(options),
     mentionsMethod(web),
-    dmsMethod(web),
     markReadMethod({ permission: options.permission, api: undefined as never, status: options.status }),
     statusMethod(options.status),
   ]
@@ -171,7 +168,7 @@ export function installed(): InstalledDescriptor {
   return checked.value
 }
 
-/** package.json's sources, as Memory's schema parses them for the kit. */
+/** package.json's sources, as the source contract's schema parses them for the kit. */
 export function declaredSources() {
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { sources: unknown }
   const checked = SOURCES_SCHEMA.check(pkg.sources)
@@ -181,7 +178,7 @@ export function declaredSources() {
 
 /** The kit's report for every declared source. */
 export async function conformanceReports(fixture: Fixture = FIXTURE): Promise<ConformanceReport[]> {
-  // Read as a consumer reads it first (the frame, checked and hashed), then as the kit reads it (Memory's schema).
+  // Read as a consumer reads it first (the frame, checked and hashed), then as the kit reads it (the contract's schema).
   installed()
   const sources = declaredSources()
   const account = String(fixture.authTest["team_id"])
@@ -198,7 +195,6 @@ export async function conformanceReports(fixture: Fixture = FIXTURE): Promise<Co
       thread: threadMethod(options, PAGE_OUTPUT),
       channels: channelsMethod(options),
       mentions: mentionsMethod(web),
-      dms: dmsMethod(web),
     }
   }
   const common = {
@@ -253,10 +249,6 @@ export async function conformanceReports(fixture: Fixture = FIXTURE): Promise<Co
         { name: "another workspace is refused", input: { account: "T0ANOTHER01" }, expect: { refuses: "ACCOUNT_UNKNOWN" } },
         { name: "another source is refused", input: { source: "slack" }, expect: { refuses: "SOURCE_UNKNOWN" } },
       ],
-    },
-    "slack.dms": {
-      calls: { probe, snapshot: (input, session) => methods(session).dms.run(input, call()) },
-      snapshotCases: [{ source: "dms", account, limit: 10 }, { source: "dms", account, since: "2026-11-12T12:30:00Z" }],
     },
   }
   const reports: ConformanceReport[] = []

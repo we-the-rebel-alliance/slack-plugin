@@ -1,6 +1,6 @@
-// The input schema of each tool Slack's hosted MCP server lists, as OpenCode's catalog showed it on 2026-11-04 (a
-// signed-in OpenCode 2.2.3, all 27 tools): every parameter, its type, its allowed values and whether it is required.
-// Slack's descriptions are left out. The fake server serves these schemas, and docs.test.ts checks every parameter
+// The input schema of each tool Slack's hosted MCP server lists, recorded on 2026-11-04 (all 27 tools): every
+// parameter, its type, its allowed values and whether it is required. Slack's descriptions are left out. The fake
+// server serves these schemas in the host tests, which run on OpenCode 2.4.1, and docs.test.ts checks every parameter
 // the skill and the docs name against them, so refresh this file whenever Slack changes a tool.
 
 type Schema = Readonly<Record<string, unknown>>

@@ -1,11 +1,11 @@
 // Starts OpenCode hosts for the host test: the embedded public `@opencode/sdk`, or a stock `opencode serve` binary.
 // Each host gets its own temp root under the system's /tmp, never under TMPDIR or HOME, where OpenCode's upward search
 // would find a `.opencode` folder of the person running the tests; the root is a git repository, which ends that
-// search. It holds HOME, OpenCode's test home, the XDG directories, TMPDIR, its database
-// and one project directory per case. The embedded host also moves the process working directory into that root,
-// because the SDK opens a location at it. The Slack server is kept offline by the probe plugin. Outbound HTTP goes
-// to a dead proxy, and stock binaries also disable model fetch, autoupdate and free models. A stock load asserts
-// that every `opencode debug paths` entry stays inside the root.
+// search, and each case is one too, because OpenCode 2.4 canonicalises a session's location to its project root. It holds
+// HOME, OpenCode's test home, the XDG directories, TMPDIR, its database and one project per case. The embedded host also
+// moves the process working directory into that root, because the SDK opens a location at it. The Slack server is kept
+// offline by the probe plugin. Outbound HTTP goes to a dead proxy, and stock binaries also disable model fetch,
+// autoupdate and free models. A stock load asserts that every `opencode debug paths` entry stays inside the root.
 import { spawn, spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
@@ -27,11 +27,6 @@ export const HOST_VERSIONS: readonly string[] = TESTED_HOSTS
 
 /** The system temp directory, resolved (/private/tmp on macOS). Not TMPDIR, which may sit under HOME. */
 export const TEMP = realpathSync("/tmp")
-/** OpenCode 2.3.1 and later: `experimental.automation` replaces `experimental.schedule`. */
-export const atLeast231 = (version: string) => {
-  const [major = 0, minor = 0, patch = 0] = version.split(".").map(Number)
-  return major > 2 || (major === 2 && (minor > 3 || (minor === 3 && patch >= 1)))
-}
 
 /**
  * A new temp directory under TEMP. With `repository`, it is also a git repository, so OpenCode's search for
@@ -61,10 +56,13 @@ export interface Host {
   location(project: Project): { readonly directory: string }
   /** The tools OpenCode called on the fake Slack server, in order. */
   toolCalls(): string[]
+  /**
+   * Whether this host runs automations. Only a stock `opencode serve` starts the automation scheduler: the embedded
+   * `@opencode/sdk` host never runs one, however it is configured (`@opencode/server` owns the scheduler).
+   */
+  readonly automations: boolean
   /** Raw HTTP to a stock `opencode serve`, for the location cases; the embedded host has none. */
   api?(method: string, path: string, body?: unknown, location?: string, headers?: Record<string, string>): Promise<{ status: number; data: unknown }>
-  /** A raw request to a stock `opencode serve`, for routes the 2.2.3 client does not have; the embedded host has none. */
-  http?(method: string, path: string, body?: unknown): Promise<{ data?: { id: string; lastOutcome?: string; lastOutput?: string }; message?: string } | undefined>
   /** `opencode api` against a stock host, in its isolated environment; the embedded host has none. */
   cli?(args: string[], cwd?: string): { status: number; out: string }
   close(): Promise<void>
@@ -95,11 +93,12 @@ const probe = (options: object) => ({ package: PROBE, options })
 const configOnly = (description: string, permissions?: Rule[]) => ({ description, mode: "primary", ...(permissions ? { permissions } : {}) })
 
 /**
- * Keeps the built-in local providers from probing their default loopback ports, and turns on schedules (or, on 2.3.1
- * and later, automations), which is how a host test runs Code Mode with nobody present to answer a prompt.
+ * Keeps the built-in local providers from probing their default loopback ports, and turns automations on: a stock
+ * `opencode serve` is how a host test runs Code Mode with nobody present to answer a prompt. The embedded `@opencode/sdk`
+ * host never runs one, so there the suite asserts the same rules over the tools RPC.
  */
-const localProvidersOff = (automations: boolean) => ({
-  experimental: automations ? { automations: true } : { schedules: true },
+const localProvidersOff = () => ({
+  experimental: { automations: true },
   providers: {
     lmstudio: { settings: { baseURL: "" } },
     ollama: { settings: { baseURL: "" } },
@@ -111,12 +110,12 @@ const localProvidersOff = (automations: boolean) => ({
  * Each project's opencode.jsonc, loading the Slack plugin from `plugin`. The probe comes after slack.workspace:
  * transforms run in config order.
  */
-function projectConfig(project: Project, plugin: string, callLog: string, automations: boolean): object {
+function projectConfig(project: Project, plugin: string, callLog: string): object {
   const configured = slack(plugin, { oauth: { client_id: CLIENT_ID } })
   switch (project) {
     case "defaults":
       return {
-        ...localProvidersOff(automations),
+        ...localProvidersOff(),
         plugins: [configured, probe({ fake: [process.execPath, FAKE_SERVER, callLog] })],
         agents: {
           custom: configOnly("Defined only in user config"),
@@ -127,7 +126,7 @@ function projectConfig(project: Project, plugin: string, callLog: string, automa
       }
     case "rules":
       return {
-        ...localProvidersOff(automations),
+        ...localProvidersOff(),
         plugins: [configured, probe({})],
         permissions: [allow("slack_slack_send_message"), deny("slack_slack_search_public")],
         agents: {
@@ -137,24 +136,24 @@ function projectConfig(project: Project, plugin: string, callLog: string, automa
         },
       }
     case "collision":
-      return { ...localProvidersOff(automations), plugins: [configured, probe({})], mcp: { servers: { slack: USER_SERVER } } }
+      return { ...localProvidersOff(), plugins: [configured, probe({})], mcp: { servers: { slack: USER_SERVER } } }
     case "invalid":
-      return { ...localProvidersOff(automations), plugins: [slack(plugin, { oauth: { client_id: CLIENT_ID, bogus: 1 } }), probe({})] }
+      return { ...localProvidersOff(), plugins: [slack(plugin, { oauth: { client_id: CLIENT_ID, bogus: 1 } }), probe({})] }
     case "connect":
       // No client ID in the options: it comes from the /connect Slack app client ID entry.
-      return { ...localProvidersOff(automations), plugins: [slack(plugin, {}), probe({})] }
+      return { ...localProvidersOff(), plugins: [slack(plugin, {}), probe({})] }
     case "shadowed":
       // The project's own skill under the bundled skill's id, which OpenCode loads instead.
-      return { ...localProvidersOff(automations), plugins: [configured, probe({})] }
+      return { ...localProvidersOff(), plugins: [configured, probe({})] }
     case "hosted":
       // A hosted return address, which a proxy forwards to OpenCode's listener on the callback port.
-      return { ...localProvidersOff(automations), plugins: [slack(plugin, { oauth: { client_id: CLIENT_ID, ...HOSTED_OAUTH } }), probe({})] }
+      return { ...localProvidersOff(), plugins: [slack(plugin, { oauth: { client_id: CLIENT_ID, ...HOSTED_OAUTH } }), probe({})] }
     case "accessAll":
     case "accessAsk":
     case "accessReadOnly": {
       // The one family option that restricts the default rules: everything, changes ask, or read-only.
       const access = project === "accessAll" ? "all" : project === "accessAsk" ? "ask-changes" : "read-only"
-      return { ...localProvidersOff(automations), plugins: [slack(plugin, { oauth: { client_id: CLIENT_ID }, access }), probe({ fake: [process.execPath, FAKE_SERVER, callLog] })] }
+      return { ...localProvidersOff(), plugins: [slack(plugin, { oauth: { client_id: CLIENT_ID }, access }), probe({ fake: [process.execPath, FAKE_SERVER, callLog] })] }
     }
   }
 }
@@ -185,19 +184,23 @@ export function isolatedEnv(root: string): Readonly<Record<string, string>> {
   }
 }
 
-function makeRoot(label: string, plugin: string, automations = false): Root {
+function makeRoot(label: string, plugin: string): Root {
   const path = tempDirectory(`slack-host-${label}-`, true)
   const env = isolatedEnv(path)
   for (const dir of Object.values(env)) mkdirSync(dir, { recursive: true })
   // A location the host opens at its working directory still must not probe loopback providers.
   const userConfig = join(path, "home", ".config", "opencode")
   mkdirSync(userConfig, { recursive: true })
-  writeFileSync(join(userConfig, "opencode.json"), JSON.stringify(localProvidersOff(automations)))
+  writeFileSync(join(userConfig, "opencode.json"), JSON.stringify(localProvidersOff()))
   const directory = (project: Project) => join(path, "projects", project)
   const callLog = join(path, "fake-slack-calls.log")
   for (const project of PROJECTS) {
     mkdirSync(directory(project), { recursive: true })
-    writeFileSync(join(directory(project), "opencode.jsonc"), JSON.stringify(projectConfig(project, plugin, callLog, automations), null, 2))
+    // Each case is its own git repository: OpenCode 2.4 canonicalises a session's location to its project root, so a
+    // shared root would put every case's sessions, and the config their permissions and commands read, in one place.
+    const init = spawnSync("git", ["init", "--quiet", directory(project)], { encoding: "utf8" })
+    if (init.status !== 0) throw new Error(`git init ${directory(project)} failed: ${init.stderr}`)
+    writeFileSync(join(directory(project), "opencode.jsonc"), JSON.stringify(projectConfig(project, plugin, callLog), null, 2))
   }
   const shadow = join(directory("shadowed"), ".opencode", "skills", "slack-search")
   mkdirSync(shadow, { recursive: true })
@@ -248,7 +251,14 @@ export async function startEmbedded(modelURL?: string): Promise<Host> {
     const version = (JSON.parse(readFileSync(join(REPO, "node_modules", "@opencode", "sdk", "package.json"), "utf8")) as { version: string }).version
     const configDir = join(root.path, "config")
     mkdirSync(configDir, { recursive: true })
-    writeFileSync(join(configDir, "opencode.json"), JSON.stringify(localProvidersOff(false)))
+    writeFileSync(join(configDir, "opencode.json"), JSON.stringify(localProvidersOff()))
+    // OpenCode 2.4's embedded host reads a location's `plugins` entries only inside an instance: without `instances`, it
+    // lists its own registry (`SdkPlugins`) and every project's plugins stay unloaded. One instance per location, keyed
+    // by the location's directory, lets each project's config load as it does on a stock server.
+    const instances = {
+      key: (session: { readonly location: { readonly directory: string } }) => session.location.directory,
+      configure: () => ({ plugins: [] }),
+    }
     const opencode = await OpenCode.create({
       // An embedded host reports "unknown" unless told, which the plugin's host check refuses.
       app: { version },
@@ -257,20 +267,26 @@ export async function startEmbedded(modelURL?: string): Promise<Host> {
       models: { fetch: false },
       fs: { filewatcher: false },
       log: { level: "error", emit: () => {} },
+      instances,
     })
-    return {
+    const host: Host = {
       version,
       client: opencode,
       root: root.path,
       state: "opencode.db",
       location: (project) => ({ directory: root.directory(project) }),
       toolCalls: toolCalls(root),
+      // The SDK host embeds @opencode/server as a library and never starts its automation scheduler.
+      automations: false,
       close: async () => {
         await opencode.close()
         restore()
         root.remove()
       },
     }
+    // Plugins load in the background: wait, with a bound, before the suite's first call (OpenCode 2.4).
+    await activatedEverywhere(opencode, root)
+    return host
   } catch (error) {
     restore()
     root.remove()
@@ -288,9 +304,9 @@ export function removeInstalls(): void {
 }
 
 /**
- * The stock CLI for `version`. Set OPENCODE_BIN_2_2_3 (and so on) to a binary you already have; otherwise the
- * unmodified npm release is installed into a temp directory with scripts disabled, once per version and run, and
- * removed by removeInstalls().
+ * The stock CLI for `version`. Set OPENCODE_BIN_2_4_1 to a binary you already have; otherwise the unmodified npm
+ * release is installed into a temp directory with scripts disabled, once per version and run, and removed by
+ * removeInstalls().
  */
 function stockBinary(version: string): string {
   const given = process.env[`OPENCODE_BIN_${version.replaceAll(".", "_")}`]
@@ -322,8 +338,8 @@ async function freePort(): Promise<number> {
  * plugin from `plugin`: the built checkout, or an installed package.
  */
 /**
- * Waits until slack.workspace and the probe have finished activating, or failed to, in every project. From 2.2.7 a
- * location answers before its plugins have loaded, so a first command, status or RPC call there would find neither.
+ * Waits until slack.workspace and the probe have finished activating, or failed to, in every project. OpenCode 2.4
+ * loads a location's plugins in the background, so a first command, status or RPC call there would find neither.
  */
 async function activatedEverywhere(client: Pick<Host["client"], "plugin">, root: Root): Promise<void> {
   const deadline = Date.now() + 120_000
@@ -340,13 +356,13 @@ async function activatedEverywhere(client: Pick<Host["client"], "plugin">, root:
 
 export async function startBinary(version: string, plugin = REPO): Promise<Host> {
   const binary = stockBinary(version)
-  const root = makeRoot(`cli-${version}`, plugin, atLeast231(version))
+  const root = makeRoot(`cli-${version}`, plugin)
   const password = randomUUID()
   const port = await freePort()
   const env = { ...root.env, ...OFFLINE, PATH: "/usr/bin:/bin", OPENCODE_PASSWORD: password }
   const stop = () => root.remove()
 
-  // Prints "opencode v2.2.3".
+  // Prints "opencode v2.4.1".
   const reported = spawnSync(binary, ["--version"], { cwd: root.path, env, encoding: "utf8" })
   if (reported.stdout.trim() !== `opencode v${version}`) {
     stop()
@@ -406,6 +422,8 @@ export async function startBinary(version: string, plugin = REPO): Promise<Host>
     state: join("home", ".local", "share", "opencode"),
     location: (project) => ({ directory: root.directory(project) }),
     toolCalls: toolCalls(root),
+    // `opencode serve` runs @opencode/server, which owns the automation scheduler.
+    automations: true,
     async api(method, path, body, location, headers = {}) {
       const url = new URL(path, `http://127.0.0.1:${port}`)
       if (location) url.searchParams.set("location[directory]", location)
@@ -420,17 +438,6 @@ export async function startBinary(version: string, plugin = REPO): Promise<Host>
         data = JSON.parse(text)
       } catch {}
       return { status: response.status, data }
-    },
-    async http(method, path, body) {
-      const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-        method,
-        headers: { authorization: `Basic ${btoa(`opencode:${password}`)}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      })
-      const text = await response.text()
-      const parsed = text ? (JSON.parse(text) as { data?: { id: string; lastOutcome?: string; lastOutput?: string }; message?: string }) : undefined
-      if (!response.ok) throw new Error(parsed?.message ?? `HTTP ${response.status}: ${text}`)
-      return parsed
     },
     cli(args, cwd) {
       const result = spawnSync(binary, ["api", "--server", `http://127.0.0.1:${port}`, ...args], { env, cwd: cwd ?? root.path, encoding: "utf8", timeout: 30_000 })
@@ -456,48 +463,44 @@ const asCheck = (code: string) =>
 
 /**
  * Runs a Code Mode program once with nobody present to answer a prompt, as the session's agent and under its rules,
- * with no model, and answers as a schedule's `if: { code }` check did at creation up to 2.3.0: `ok` when the program
- * returned a boolean or `{ wake }`, else OpenCode's message (a refusal, or what the program threw). Up to 2.3.0 it is
- * that check, and the schedule is deleted at once. From 2.3.1 the stock server's `experimental.automation` replaces it:
- * creation refuses what the rules do not allow, as the check did, and the program runs when the scheduler finds it due,
- * so its outcome is read back over raw HTTP (the 2.2.3 client has no automation methods) before it is deleted. A run
- * that never comes throws, so it is never read as a refusal.
+ * with no model, through a stock server's automation: creation refuses what the rules do not allow, and the program
+ * runs when the scheduler finds it due, so its outcome is read back before the automation is deleted. A run that never
+ * comes throws, so it is never read as a refusal. Only a stock `opencode serve` runs automations (2.4: the embedded
+ * `@opencode/sdk` host never does), so callers assert on the permission path there instead.
  */
 export async function unattended(host: Host, sessionID: string, code: string, at: { location: { directory: string } }): Promise<Unattended> {
+  if (!host.automations) throw new Error("this host never runs automations; assert on the permission path instead")
   const name = "slack-host-test"
   const refused = (error: unknown): Unattended => ({ ok: false, error: error instanceof Error ? error.message : String(error) })
-  if (host.http && atLeast231(host.version)) {
-    const http = host.http
-    let automationID: string
-    try {
-      const created = await http("POST", "/api/experimental/automation", { sessionID, name, trigger: { type: "at", at: "in 1 millis" }, action: { type: "code", code: asCheck(code) } })
-      automationID = created?.data?.id ?? ""
-      if (!automationID) throw new Error("the automation was created without an id")
-    } catch (error) {
-      return refused(error)
-    }
-    try {
-      const deadline = Date.now() + 60_000
-      let info: { lastOutcome?: string; lastOutput?: string } | undefined
-      for (;;) {
-        info = (await http("GET", `/api/experimental/automation/${automationID}`))?.data
-        if (info?.lastOutcome !== undefined) break
-        if (Date.now() > deadline) throw new Error("timed out waiting until the automation's code action has run (is the host's Automation scheduler forked? see the harness's createSdk)")
-        await Bun.sleep(50)
-      }
-      if (info.lastOutcome === "fired" || info.lastOutcome === "late") return { ok: true }
-      // A program that cannot succeed on a retry (a bad return value, a scoped ask) pauses its automation.
-      if (info.lastOutcome === "failed") return { ok: false, error: (info.lastOutput ?? "").replace(/^Paused: /, "") }
-      throw new Error(`the automation's code action ended "${info.lastOutcome}": ${info.lastOutput ?? ""}`)
-    } finally {
-      await http("DELETE", `/api/experimental/automation/${automationID}`).catch(() => {})
-    }
-  }
+  const directory = at.location.directory
+  let automationID: string
   try {
-    const schedule = await host.client.experimental.schedule.create({ sessionID, name, when: { in: "6 hours" }, prompt: "noop", if: { code }, ...at } as never)
-    await host.client.experimental.schedule.delete({ scheduleID: schedule.id, ...at } as never)
-    return { ok: true }
+    const created = await host.client.experimental.automation.create({
+      sessionID,
+      directory,
+      name,
+      trigger: { type: "at", at: "in 1 millis" },
+      action: { type: "code", code: asCheck(code) },
+    })
+    automationID = created.id
+    if (!automationID) throw new Error("the automation was created without an id")
   } catch (error) {
     return refused(error)
+  }
+  try {
+    const deadline = Date.now() + 60_000
+    let info: Awaited<ReturnType<Host["client"]["experimental"]["automation"]["get"]>> | undefined
+    for (;;) {
+      info = await host.client.experimental.automation.get({ automationID })
+      if (info.lastOutcome !== undefined) break
+      if (Date.now() > deadline) throw new Error("timed out waiting until the automation's code action has run (does this host start its automation scheduler?)")
+      await Bun.sleep(50)
+    }
+    if (info.lastOutcome === "fired" || info.lastOutcome === "late") return { ok: true }
+    // A program that cannot succeed on a retry (a bad return value, a scoped ask) pauses its automation.
+    if (info.lastOutcome === "failed") return { ok: false, error: (info.lastOutput ?? "").replace(/^Paused: /, "") }
+    throw new Error(`the automation's code action ended "${info.lastOutcome}": ${info.lastOutput ?? ""}`)
+  } finally {
+    await host.client.experimental.automation.delete({ automationID }).catch(() => {})
   }
 }

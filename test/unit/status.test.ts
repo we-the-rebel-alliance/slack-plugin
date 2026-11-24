@@ -19,7 +19,7 @@ const allow = (action: string): Rule => ({ action, resource: "*", effect: "allow
 function input(overrides: Partial<StatusInput> = {}): StatusInput {
   return {
     version: "9.9.9",
-    hostVersion: "2.2.3",
+    hostVersion: "2.4.1",
     hostSupported: true,
     hostTested: true,
     parsed: OK,
@@ -44,8 +44,8 @@ const STATES: readonly (readonly [string, StatusInput, Pick<Status, "state" | "c
   ["an untested host", input({ hostVersion: "2.1.0", hostSupported: false, hostTested: false, active: false }), {
     state: "host_untested",
     code: "HOST_UNTESTED",
-    message: "OpenCode 2.1.0 is outside the supported range >=2.2.3 <2.4.0, so Slack is not set up.",
-    nextStep: 'Use OpenCode >=2.2.3 <2.4.0, or set "allowUntestedHost": true in this plugin\'s options to run anyway.',
+    message: "OpenCode 2.1.0 is outside the supported range >=2.4.1 <2.5.0, so Slack is not set up.",
+    nextStep: 'Use OpenCode >=2.4.1 <2.5.0, or set "allowUntestedHost": true in this plugin\'s options to run anyway.',
   }],
   ["an untested host with invalid options", input({ hostVersion: "0.0.0-dev-1", hostSupported: false, hostTested: false, active: false, parsed: INVALID }), {
     state: "not_configured",
@@ -62,7 +62,7 @@ const STATES: readonly (readonly [string, StatusInput, Pick<Status, "state" | "c
   ["no client ID", input({ client: { invalid: false } }), {
     state: "not_configured",
     code: "CLIENT_ID_MISSING",
-    message: "No Slack app client ID is set, so Slack is not added. To create the app, use the manifest at https://github.com/joe-broadhead/opencode-slack/blob/HEAD/docs/slack-app-manifest.json.",
+    message: "No Slack app client ID is set, so Slack is not added. To create the app, use the manifest at https://github.com/we-the-rebel-alliance/slack-plugin/blob/master/docs/slack-app-manifest.json.",
     nextStep: NO_CLIENT_NEXT,
   }],
   ["an unusable saved client ID", input({ client: { invalid: true } }), {
@@ -128,43 +128,43 @@ describe("buildStatus states", () => {
   })
 
   test("an untested host the user allowed proceeds to the connection state and still reports the host", () => {
-    const status = buildStatus(input({ hostVersion: "2.4.0-beta.1", hostSupported: false, hostTested: false }))
+    const status = buildStatus(input({ hostVersion: "2.5.0-beta.1", hostSupported: false, hostTested: false }))
     expect(status.state).toBe("connected")
-    expect(status.host).toEqual({ version: "2.4.0-beta.1", range: ">=2.2.3 <2.4.0", tested: false })
-    expect(formatStatus(status)).toContain("OpenCode: 2.4.0-beta.1 (untested; supported range >=2.2.3 <2.4.0)")
+    expect(status.host).toEqual({ version: "2.5.0-beta.1", range: ">=2.4.1 <2.5.0", tested: false })
+    expect(formatStatus(status)).toContain("OpenCode: 2.5.0-beta.1 (untested; supported range >=2.4.1 <2.5.0)")
   })
 
   test("an untested host the user allowed, with invalid options, reports the options, not the allowance", () => {
     const parsed = parseOptions({ allowUntestedHost: true, oauth: { client_id: "C1", bogus: 1 } })
-    const status = buildStatus(input({ hostVersion: "2.4.0", hostSupported: false, hostTested: false, active: false, parsed }))
+    const status = buildStatus(input({ hostVersion: "2.5.0", hostSupported: false, hostTested: false, active: false, parsed }))
     expect(status).toMatchObject({
       state: "not_configured",
       code: "OPTIONS_INVALID",
       message: "Option oauth.bogus: This option is not supported.",
       nextStep: "Remove it. Supported oauth options: client_id, redirect_uri, callback_port, scopes, client_secret, auth_server_metadata_url.",
-      host: { version: "2.4.0", range: ">=2.2.3 <2.4.0", tested: false },
+      host: { version: "2.5.0", range: ">=2.4.1 <2.5.0", tested: false },
     })
     expect(formatStatus(status)).not.toContain("allowUntestedHost")
-    expect(formatStatus(status)).toContain("OpenCode: 2.4.0 (untested; supported range >=2.2.3 <2.4.0)")
+    expect(formatStatus(status)).toContain("OpenCode: 2.5.0 (untested; supported range >=2.4.1 <2.5.0)")
   })
 
   test("a release inside the supported range that the checks do not run on proceeds, and says it is untested", () => {
-    const status = buildStatus(input({ hostVersion: "2.2.99", hostSupported: true, hostTested: false }))
-    expect(status).toMatchObject({ state: "connected", nextStep: "Nothing to do.", host: { version: "2.2.99", range: ">=2.2.3 <2.4.0", tested: false } })
-    expect(formatStatus(status)).toContain("OpenCode: 2.2.99 (untested; supported range >=2.2.3 <2.4.0)")
+    const status = buildStatus(input({ hostVersion: "2.4.99", hostSupported: true, hostTested: false }))
+    expect(status).toMatchObject({ state: "connected", nextStep: "Nothing to do.", host: { version: "2.4.99", range: ">=2.4.1 <2.5.0", tested: false } })
+    expect(formatStatus(status)).toContain("OpenCode: 2.4.99 (untested; supported range >=2.4.1 <2.5.0)")
   })
 
   test("each tested release reads tested, with the supported range", () => {
-    for (const version of ["2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.2.7", "2.3.0", "2.3.1", "2.3.2"])
-      expect(formatStatus(buildStatus(input({ hostVersion: version })))).toContain(`OpenCode: ${version} (tested; supported range >=2.2.3 <2.4.0)`)
+    for (const version of ["2.4.1"])
+      expect(formatStatus(buildStatus(input({ hostVersion: version })))).toContain(`OpenCode: ${version} (tested; supported range >=2.4.1 <2.5.0)`)
   })
 
   test("carries the plugin's version, and a host that reports no version as null", () => {
     expect(buildStatus(input()).version).toBe("9.9.9")
     const status = buildStatus(input({ hostVersion: "", hostSupported: false, hostTested: false, active: false }))
     expect(status).toMatchObject({ state: "host_untested", host: { version: null } })
-    expect(status.message).toBe("OpenCode of an unknown version is outside the supported range >=2.2.3 <2.4.0, so Slack is not set up.")
-    expect(formatStatus(status)).toContain("OpenCode: unknown version (untested; supported range >=2.2.3 <2.4.0)")
+    expect(status.message).toBe("OpenCode of an unknown version is outside the supported range >=2.4.1 <2.5.0, so Slack is not set up.")
+    expect(formatStatus(status)).toContain("OpenCode: unknown version (untested; supported range >=2.4.1 <2.5.0)")
   })
 
   test("never shows the host's text for a needed sign-in, which can carry an authorization URL", () => {
@@ -192,9 +192,9 @@ describe("buildStatus details", () => {
     expect(buildStatus(input())).toMatchObject({
       client: { id: "C1", mode: "public_pkce", source: "options" },
       callback: "http://localhost:8765/callback",
-      scopes: ["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:read", "im:history", "mpim:read", "mpim:history"],
+      scopes: ["channels:history", "channels:read", "groups:read", "im:read", "mpim:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"],
       asksBefore: [],
-      host: { version: "2.2.3", range: ">=2.2.3 <2.4.0", tested: true },
+      host: { version: "2.4.1", range: ">=2.4.1 <2.5.0", tested: true },
     })
   })
 
@@ -373,10 +373,10 @@ describe("formatStatus", () => {
       "Server: slack at https://mcp.slack.com/mcp",
       "Client: C1 (public, PKCE; set in plugin options)",
       "Callback: http://localhost:8765/callback (register exactly this URL in the app's Redirect URLs)",
-      "Scopes: channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:read im:history mpim:read mpim:history",
+      "Scopes: channels:history channels:read groups:read im:read mpim:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history",
       "Tools: 0 read, 0 private search, 0 file, 0 write",
       "Agents without default rules: none",
-      "OpenCode: 2.2.3 (tested; supported range >=2.2.3 <2.4.0)",
+      "OpenCode: 2.4.1 (tested; supported range >=2.4.1 <2.5.0)",
       `Next step: ${SIGN_IN}`,
     ].join("\n"))
   })
@@ -407,10 +407,10 @@ describe("formatStatus", () => {
 
   test("a connected sign-in that lacks scopes this version asks for says so, and its next step is to sign in again", () => {
     const requested = (input().parsed as { ok: true; options: { scopes: readonly string[] } }).options.scopes
-    const status = buildStatus(input({ granted: requested.filter((scope) => !scope.startsWith("im:")) }))
-    expect(status).toMatchObject({ state: "connected", missingScopes: ["im:read", "im:history"] })
-    expect(status.nextStep).toStartWith("The Slack sign-in lacks im:read im:history, which this version asks for. Add them to your Slack app's user scopes")
-    expect(formatStatus(status)).toContain(" (the sign-in lacks im:read im:history: sign in again)")
+    const status = buildStatus(input({ granted: requested.filter((scope) => scope !== "im:history") }))
+    expect(status).toMatchObject({ state: "connected", missingScopes: ["im:history"] })
+    expect(status.nextStep).toStartWith("The Slack sign-in lacks im:history, which this version asks for. Add it to your Slack app's user scopes")
+    expect(formatStatus(status)).toContain(" (the sign-in lacks im:history: sign in again)")
     // Every scope granted, or the granted list unknown: nothing is reported.
     expect(buildStatus(input({ granted: requested })).missingScopes).toBeUndefined()
     expect(buildStatus(input()).missingScopes).toBeUndefined()

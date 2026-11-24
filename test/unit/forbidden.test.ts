@@ -1,7 +1,7 @@
 // The forbidden APIs in AGENTS.md: fork-only and legacy host APIs, private host source and unstable host packages.
 // No file in src/, test/ or skills/ may use them. This file names them, so it is the only one not searched.
 import { describe, expect, test } from "bun:test"
-import { readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -154,7 +154,7 @@ describe("the release working folder", () => {
     const { execFileSync } = await import("node:child_process")
     const listed = execFileSync("git", ["ls-files", "-z"], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)
     const skip = new Set(["AGENTS.md", "test/unit/forbidden.test.ts"])
-    const hits = listed.filter((path) => !skip.has(path)).flatMap((path) => {
+    const hits = listed.filter((path) => !skip.has(path) && existsSync(join(REPO, path))).flatMap((path) => {
       const bytes = readFileSync(join(REPO, path))
       if (bytes.includes(0)) return []
       return bytes.toString("utf8").split(/\r?\n/).flatMap((line, index) => (/opencode-release\//.test(line) ? [`${path}:${index + 1}`] : []))

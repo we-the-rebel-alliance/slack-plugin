@@ -1,11 +1,9 @@
-// The slack.mentions and slack.dms sources (after @domeevans's domeevans/opencode-slack#1), the Web API read path they
-// share, and the slack.workspace source's consent list, against Slack's answers from test/fixtures/conformance.json.
-// Every id below is invented, Slack's documented example, or the placeholder U00CURRENTUSER.
+// The slack.mentions source (after @domeevans's mentions_list), the Web API read path it uses, and the
+// slack.workspace source's consent list, against Slack's answers from test/fixtures/conformance.json. Every id below
+// is invented, Slack's documented example, or the placeholder U00CURRENTUSER.
 import { describe, expect, test } from "bun:test"
 import { encodeBoundCursor } from "@we-the-rebel-alliance/source-contract/cursor"
 import { resultProblems } from "@we-the-rebel-alliance/source-contract/events"
-import { checkOutput } from "@we-the-rebel-alliance/source-contract/registry"
-import { slackDms } from "../../src/dms.js"
 import { identityOf } from "../../src/identity.js"
 import { slackMentions } from "../../src/mentions.js"
 import type { SlackApiResult } from "../../src/slack-api.js"
@@ -36,14 +34,13 @@ function options(overrides: Partial<WebReadOptions> = {}) {
 }
 
 const mentions = (web: WebReadOptions, input: unknown) => slackMentions((account) => webReader(web, context, account, "mentions_list"), () => webSignedIn(web, "mentions_list"), input, NOW)
-const dms = (web: WebReadOptions, input: unknown) => slackDms((account) => webReader(web, context, account, "dms_list"), () => webSignedIn(web, "dms_list"), input, NOW)
 
 describe("the Web API read path", () => {
   test("asserts slack.read on <workspace>:<method> before each call", async () => {
     const { web, asserted, calls } = options()
-    await webReader(web, context, ACCOUNT, "dms_list")("users.conversations", {})
-    expect(asserted).toEqual([{ action: WEB_READ_ACTION, resources: [`${ACCOUNT}:users.conversations`] }])
-    expect(calls).toEqual(["users.conversations"])
+    await webReader(web, context, ACCOUNT, "mentions_list")("assistant.search.context", { query: "<@U00CURRENTUSER>" })
+    expect(asserted).toEqual([{ action: WEB_READ_ACTION, resources: [`${ACCOUNT}:assistant.search.context`] }])
+    expect(calls).toEqual(["assistant.search.context"])
     expect(WEB_READ_ACTION).toBe("slack.read")
   })
 
@@ -51,24 +48,24 @@ describe("the Web API read path", () => {
     const answers: SlackApiResult[] = [{ ok: false, error: "ratelimited", retryAfter: 1 }, { ok: false, error: "ratelimited", retryAfter: 1 }, { ok: true, credential: "c", body: { ok: true } }]
     const waited: number[] = []
     const flaky = options({ api: { call: async () => answers.shift()! }, sleep: async (ms) => void waited.push(ms) }).web
-    expect(await webReader(flaky, context, ACCOUNT, "dms_list")("users.info", {})).toEqual({ ok: true })
+    expect(await webReader(flaky, context, ACCOUNT, "mentions_list")("assistant.search.context", {})).toEqual({ ok: true })
     expect(waited).toEqual([1000, 1000])
     const limited = options({ api: { call: async () => ({ ok: false, error: "ratelimited", retryAfter: 120 }) } }).web
-    await expect(webReader(limited, context, ACCOUNT, "dms_list")("users.info", {})).rejects.toThrow("RATE_LIMITED: Slack rate-limited users.info for dms_list. Next step: Call dms_list again in 120 seconds.")
+    await expect(webReader(limited, context, ACCOUNT, "mentions_list")("assistant.search.context", {})).rejects.toThrow("RATE_LIMITED: Slack rate-limited assistant.search.context for mentions_list. Next step: Call mentions_list again in 120 seconds.")
     const scoped = options({ api: { call: async () => ({ ok: false, error: "missing_scope", needed: "im:history" }) } }).web
-    await expect(webReader(scoped, context, ACCOUNT, "dms_list")("conversations.history", {})).rejects.toThrow(/^SCOPE_MISSING: Slack refused conversations\.history: the Slack sign-in lacks the scope im:history\./)
+    await expect(webReader(scoped, context, ACCOUNT, "mentions_list")("assistant.search.context", {})).rejects.toThrow(/^SCOPE_MISSING: Slack refused assistant\.search\.context: the Slack sign-in lacks the scope im:history\./)
     const disabled = options({ api: { call: async () => ({ ok: false, error: "feature_not_enabled" }) } }).web
     await expect(webReader(disabled, context, ACCOUNT, "mentions_list")("assistant.search.context", {})).rejects.toThrow(
       /^FEATURE_NOT_ENABLED: Slack refused assistant\.search\.context for mentions_list: Real-time Search is not enabled .* Next step: Use a Slack app that is internal to your workspace or listed in the Slack Marketplace/,
     )
     const skipped = options({ api: { call: async () => ({ ok: false, error: "channel_not_found" }) } }).web
-    expect(await webReader(skipped, context, ACCOUNT, "dms_list")("conversations.info", {}, ["channel_not_found"])).toBeUndefined()
+    expect(await webReader(skipped, context, ACCOUNT, "mentions_list")("assistant.search.context", {}, ["channel_not_found"])).toBeUndefined()
   })
 
   test("without a signed-in account, says why: status's code, or UNAVAILABLE", async () => {
-    await expect(webSignedIn(options({ identity: async () => undefined }).web, "dms_list")).rejects.toThrow(/^UNAVAILABLE: /)
+    await expect(webSignedIn(options({ identity: async () => undefined }).web, "mentions_list")).rejects.toThrow(/^UNAVAILABLE: /)
     const signIn = { state: "sign_in_required", code: "AUTH_REQUIRED", message: "Sign in to Slack.", nextStep: "Run /connect." } as unknown as Status
-    await expect(webSignedIn(options({ identity: async () => undefined, status: async () => signIn }).web, "dms_list")).rejects.toThrow("AUTH_REQUIRED: Sign in to Slack; dms_list cannot name the signed-in account. Next step: Run /connect.")
+    await expect(webSignedIn(options({ identity: async () => undefined, status: async () => signIn }).web, "mentions_list")).rejects.toThrow("AUTH_REQUIRED: Sign in to Slack; mentions_list cannot name the signed-in account. Next step: Run /connect.")
   })
 })
 
@@ -77,7 +74,7 @@ describe("mentions_list", () => {
     const { web, asserted } = options()
     const page = await mentions(web, { since: "2026-11-12T00:00:00Z" })
     expect(resultProblems(page)).toEqual([])
-    expect(page).toMatchObject({ plugin: "@joe-broadhead/opencode-slack", source: "mentions", account: ACCOUNT, owner: { id: "slack:U00CURRENTUSER", label: "pilot.owner" }, more: false })
+    expect(page).toMatchObject({ plugin: "@we-the-rebel-alliance/slack-plugin", source: "mentions", account: ACCOUNT, owner: { id: "slack:U00CURRENTUSER", label: "pilot.owner" }, more: false })
     expect(page.events.map((event) => [event.external_id, event.thread, event.actors[0]!.id, event.labels])).toEqual([
       ["C0EXAMPLE01:1794477900.000100", "slack-thread:C0EXAMPLE01:1794477600.000100", "slack:U012AB3CD", ["mention", "channel", "channel:C0EXAMPLE01", "thread-reply"]],
       ["D0EXAMPLE02:1794486000.000100", null, "slack:W012A3CDE", ["mention", "dm", "channel:D0EXAMPLE02"]],
@@ -113,37 +110,6 @@ describe("mentions_list", () => {
   test("a window with more than five pages of mentions is TOO_MANY_MESSAGES, never a skip", async () => {
     const endless = { call: async () => ({ ok: true as const, credential: "c", body: { ok: true, results: { messages: [] }, response_metadata: { next_cursor: "more" } } }) }
     await expect(mentions(options({ api: endless }).web, { since: "2026-11-12T00:00:00Z" })).rejects.toThrow(/^TOO_MANY_MESSAGES: /)
-  })
-})
-
-describe("dms_list", () => {
-  test("answers the newest conversations as source-contract's inbox, unread first in meaning, with no preview of a secret", async () => {
-    const { web, calls } = options()
-    const snapshot = await dms(web, { source: "dms", account: ACCOUNT })
-    expect(checkOutput("inbox", snapshot.data).ok).toBe(true)
-    expect(snapshot).toMatchObject({ source: "dms", account: ACCOUNT, asOf: FIXTURE.now, trust: "untrusted" })
-    expect(snapshot.data.unread).toBe(1)
-    expect(snapshot.data.items.map((item) => [item.id, item.title, item.from, item.preview, item.important])).toEqual([
-      ["D0EXAMPLE02", "Kofi Boateng", "Kofi Boateng", "<@U00CURRENTUSER> can you review the migration plan?", true],
-      ["G0EXAMPLE04", "Ama, Kofi Boateng", "Ama", undefined, false],
-    ])
-    // The note to oneself is not a conversation, and the one Slack will not open is left out.
-    expect(calls.filter((method) => method === "conversations.history")).toHaveLength(3)
-    expect(new Set(calls)).toEqual(new Set(["users.conversations", "conversations.history", "conversations.info", "conversations.members", "users.info"]))
-  })
-
-  test("keeps the conversations since a time, at most a limit, and refuses a bad input before any read", async () => {
-    expect((await dms(options().web, { since: "2026-11-12T12:00:00Z" })).data.items.map((item) => item.id)).toEqual(["D0EXAMPLE02"])
-    // Only `limit` conversations are read: one history and one info call each, never one per listed conversation.
-    const capped = options()
-    expect((await dms(capped.web, { limit: 1 })).data.items.map((item) => item.id)).toEqual(["D0EXAMPLE02"])
-    expect(capped.calls.filter((method) => method === "conversations.history" || method === "conversations.info")).toEqual(["conversations.history", "conversations.info"])
-    const { web, calls } = options()
-    await expect(dms(web, { limit: 31 })).rejects.toThrow(/^INPUT_INVALID: /)
-    await expect(dms(web, { cursor: "x" })).rejects.toThrow(/^INPUT_INVALID: /)
-    await expect(dms(web, { source: "mentions" })).rejects.toThrow(/^SOURCE_UNKNOWN: /)
-    await expect(dms(web, { account: "T0ANOTHER01" })).rejects.toThrow(/^ACCOUNT_UNKNOWN: /)
-    expect(calls).toEqual([])
   })
 })
 
