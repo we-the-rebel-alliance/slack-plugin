@@ -5,8 +5,9 @@ import { statusRows, type Status } from "./status.js"
 
 const UNAVAILABLE = "STATUS_UNAVAILABLE: Slack status is unavailable. Next step: Press r to retry."
 /**
- * Everything that can change what the dialog shows, including the client ID saved in /connect. OpenCode 2.2.x does
- * not stream `mcp.tools.changed` to clients, so a connected server that lists no tools yet says to press r.
+ * Everything OpenCode 2.4.1 streams that can change what the dialog shows, including the client ID saved in /connect
+ * (`@opencode/server/dist/api.d.ts`: `mcp.status.changed`, `agent.updated`, `integration.updated`,
+ * `credential.updated`, `credential.switched`). `server.connected` is the client's synthetic connect event.
  */
 const REFRESH_ON = [
   "server.connected",
@@ -16,7 +17,7 @@ const REFRESH_ON = [
   "credential.updated",
   "credential.switched",
 ] as const
-const NO_TOOLS_YET = "OpenCode lists Slack's tools just after it connects: press r to refresh."
+const NO_TOOLS_YET = "OpenCode lists Slack's tools just after it connects."
 
 /** The status rows, with a hint on the tools row while a connected server lists no tools yet. */
 function dialogRows(status: Status) {
