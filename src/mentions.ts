@@ -208,7 +208,7 @@ export interface MentionsWho {
 }
 
 const DESCRIPTION =
-  "For Memory and scripts: lists the Slack messages that mention the signed-in user, in public and private channels, group " +
+  "For a consumer and scripts: lists the Slack messages that mention the signed-in user, in public and private channels, group " +
   "messages and direct messages, since a cursor, as normalised events, oldest first, each with its author, its thread and " +
   "its permalink. Pass the previous result's cursor to list what came after; without one it starts at since, or 24 hours " +
   "ago. It searches with Slack's assistant.search.context and leaves out a message that holds a secret (refused). Message " +

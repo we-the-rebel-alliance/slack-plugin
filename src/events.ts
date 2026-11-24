@@ -37,7 +37,7 @@ import type { Status } from "./status.js"
  * writes (`From`, `Message TS`, `Thread TS`, `Reply count`, `Permalink`, `Text`).
  *
  * Every read goes through the host's own executor for `slack_<tool>`, with the caller's context, so the read's rules
- * apply and the plugin holds no token. Memory's collector runs it unattended, in Code Mode or as the tools RPC method
+ * apply and the plugin holds no token. A consumer's collector runs it unattended, in Code Mode or as the tools RPC method
  * `events_list`.
  */
 
@@ -630,7 +630,7 @@ export async function slackEvents(read: Read, who: Who, optionChannels: readonly
 // ── The tool and the tools RPC method ───────────────────────────────────
 
 const DESCRIPTION =
-  "For Memory's collector and scripts, not for answering questions: lists the Slack messages posted since a cursor in the " +
+  "For a consumer's collector and scripts, not for answering questions: lists the Slack messages posted since a cursor in the " +
   "channels and direct messages the call's scope.channels names (within the plugin's events.channels option when it is " +
   "set; without a scope, that option's), as normalised events, oldest first, each with its author as a slack: id, its " +
   "thread and its permalink. Pass the previous result's cursor with the same scope to list what came after; without one " +

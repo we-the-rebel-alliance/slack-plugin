@@ -30,7 +30,7 @@ export function defaultRules(access: Access = "all"): Rule[] {
   return [
     rule(`${SERVER}_*`, other),
     ...READ_LIKE.map((tool) => rule(`${SERVER}_${tool}`, "allow")),
-    // The plugin's own events_list only reads, and Memory's collector runs it with no one there.
+    // The plugin's own events_list only reads, and a consumer's collector runs it with no one there.
     rule(`${SERVER}_${EVENTS_LIST}`, "allow"),
     // Its probe names the signed-in workspace and user and reads no content.
     rule(`${SERVER}_${PROBE}`, "allow"),

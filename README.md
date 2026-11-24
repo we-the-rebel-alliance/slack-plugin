@@ -16,12 +16,13 @@ permission rules. OpenCode holds the Slack sign-in; the plugin never hands out a
 
 ## Install
 
+Install from a release:
+
 ```sh
-opencode plugin add github:we-the-rebel-alliance/slack-plugin#vX.Y.Z
+opencode plugin add github:we-the-rebel-alliance/slack-plugin#v<version>
 ```
 
-No release is cut yet: every earlier tag belongs to the repository's previous name and home, and does not resolve.
-Until `v0.0.0` exists, point the entry at a local checkout of this repository.
+The first release on plugin-contract is v0.0.0 (phase 4b).
 
 ## Sign in
 

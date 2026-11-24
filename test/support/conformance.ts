@@ -168,7 +168,7 @@ export function installed(): InstalledDescriptor {
   return checked.value
 }
 
-/** package.json's sources, as Memory's schema parses them for the kit. */
+/** package.json's sources, as the source contract's schema parses them for the kit. */
 export function declaredSources() {
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { sources: unknown }
   const checked = SOURCES_SCHEMA.check(pkg.sources)
@@ -178,7 +178,7 @@ export function declaredSources() {
 
 /** The kit's report for every declared source. */
 export async function conformanceReports(fixture: Fixture = FIXTURE): Promise<ConformanceReport[]> {
-  // Read as a consumer reads it first (the frame, checked and hashed), then as the kit reads it (Memory's schema).
+  // Read as a consumer reads it first (the frame, checked and hashed), then as the kit reads it (the contract's schema).
   installed()
   const sources = declaredSources()
   const account = String(fixture.authTest["team_id"])

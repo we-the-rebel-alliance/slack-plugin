@@ -11,7 +11,8 @@ npm ci --ignore-scripts
 npm run check
 ```
 
-To try a checkout in OpenCode, build it with `npm run build` and point a `plugins` entry at the checkout directory:
+To load a checkout for development (not an install; releases install from a tag), build it with `npm run build` and
+point a `plugins` entry at the checkout directory:
 
 ```jsonc
 { "plugins": [{ "package": "/path/to/slack-plugin", "options": {} }] }

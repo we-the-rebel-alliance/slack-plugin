@@ -10,7 +10,7 @@ The plugin restarts at `0.0.0` as `@we-the-rebel-alliance/slack-plugin`, after t
 - **Two sources.** `slack.workspace` (the messages of the channels a consumer confirms) and `slack.mentions` (the
   messages that mention you). The `slack.dms` snapshot and its `dms_list` were removed, with the direct and group
   message scopes only it needed.
-- **No app-specific surface.** The Jelly declaration stays as the plugin's declaration, and its `docs/jelly.md` and
+- **No app-specific surface.** The declaration stays as the plugin's declaration, and its app guide and the
   README/AGENTS sections are gone. The `sources` and `jelly` keys are replaced by the plugin contract's `capabilities`
   manifest in the next phase.
 - **No contract-1 cursors.** A cursor is read only when `events_list` bound it to this plugin, source, workspace and
