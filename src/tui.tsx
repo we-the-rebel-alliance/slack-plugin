@@ -6,12 +6,14 @@ import { statusRows, type Status } from "./status.js"
 const UNAVAILABLE = "STATUS_UNAVAILABLE: Slack status is unavailable. Next step: Press r to retry."
 /**
  * Everything OpenCode 2.4.1 streams that can change what the dialog shows, including the client ID saved in /connect
- * (`@opencode/server/dist/api.d.ts`: `mcp.status.changed`, `agent.updated`, `integration.updated`,
- * `credential.updated`, `credential.switched`). `server.connected` is the client's synthetic connect event.
+ * (`@opencode/server/dist/api.d.ts`: `mcp.status.changed`, `experimental.mcp.event`, `agent.updated`,
+ * `integration.updated`, `credential.updated`, `credential.switched`). `server.connected` is the client's synthetic
+ * connect event; an MCP Events delivery may accompany a tools change, so it refreshes the open dialog too.
  */
 const REFRESH_ON = [
   "server.connected",
   "mcp.status.changed",
+  "experimental.mcp.event",
   "agent.updated",
   "integration.updated",
   "credential.updated",

@@ -45,7 +45,7 @@ function status(overrides: Partial<StatusInput> = {}): Status {
 }
 
 // Every event that can change the dialog.
-const EVENTS = ["server.connected", "mcp.status.changed", "agent.updated", "integration.updated", "credential.updated", "credential.switched"]
+const EVENTS = ["server.connected", "mcp.status.changed", "experimental.mcp.event", "agent.updated", "integration.updated", "credential.updated", "credential.switched"]
 
 const STATES: readonly (readonly [string, Status])[] = [
   ["connected", status({ tools: [{ name: "slack_search_public", options: { namespace: "slack" } }, { name: "slack_brand_new", options: { namespace: "slack" } }] })],
