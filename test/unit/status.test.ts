@@ -192,7 +192,7 @@ describe("buildStatus details", () => {
     expect(buildStatus(input())).toMatchObject({
       client: { id: "C1", mode: "public_pkce", source: "options" },
       callback: "http://localhost:8765/callback",
-      scopes: ["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim"],
+      scopes: ["channels:history", "channels:read", "search:read.public", "users:read", "search:read.private", "search:read.im", "search:read.mpim", "im:history", "mpim:history"],
       asksBefore: [],
       host: { version: "2.4.1", range: ">=2.4.1 <2.5.0", tested: true },
     })
@@ -373,7 +373,7 @@ describe("formatStatus", () => {
       "Server: slack at https://mcp.slack.com/mcp",
       "Client: C1 (public, PKCE; set in plugin options)",
       "Callback: http://localhost:8765/callback (register exactly this URL in the app's Redirect URLs)",
-      "Scopes: channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim",
+      "Scopes: channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history",
       "Tools: 0 read, 0 private search, 0 file, 0 write",
       "Agents without default rules: none",
       "OpenCode: 2.4.1 (tested; supported range >=2.4.1 <2.5.0)",
@@ -407,10 +407,10 @@ describe("formatStatus", () => {
 
   test("a connected sign-in that lacks scopes this version asks for says so, and its next step is to sign in again", () => {
     const requested = (input().parsed as { ok: true; options: { scopes: readonly string[] } }).options.scopes
-    const status = buildStatus(input({ granted: requested.filter((scope) => scope !== "search:read.mpim") }))
-    expect(status).toMatchObject({ state: "connected", missingScopes: ["search:read.mpim"] })
-    expect(status.nextStep).toStartWith("The Slack sign-in lacks search:read.mpim, which this version asks for. Add it to your Slack app's user scopes")
-    expect(formatStatus(status)).toContain(" (the sign-in lacks search:read.mpim: sign in again)")
+    const status = buildStatus(input({ granted: requested.filter((scope) => scope !== "im:history") }))
+    expect(status).toMatchObject({ state: "connected", missingScopes: ["im:history"] })
+    expect(status.nextStep).toStartWith("The Slack sign-in lacks im:history, which this version asks for. Add it to your Slack app's user scopes")
+    expect(formatStatus(status)).toContain(" (the sign-in lacks im:history: sign in again)")
     // Every scope granted, or the granted list unknown: nothing is reported.
     expect(buildStatus(input({ granted: requested })).missingScopes).toBeUndefined()
     expect(buildStatus(input()).missingScopes).toBeUndefined()

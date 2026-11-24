@@ -397,6 +397,8 @@
         "scopes": [
           "channels:history",
           "channels:read",
+          "im:history",
+          "mpim:history",
           "search:read.im",
           "search:read.mpim",
           "search:read.private",

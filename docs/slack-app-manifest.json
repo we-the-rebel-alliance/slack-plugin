@@ -15,7 +15,9 @@
         "users:read",
         "search:read.private",
         "search:read.im",
-        "search:read.mpim"
+        "search:read.mpim",
+        "im:history",
+        "mpim:history"
       ]
     },
     "pkce_enabled": true

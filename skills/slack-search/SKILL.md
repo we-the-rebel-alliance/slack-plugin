@@ -49,8 +49,8 @@ A hit is a fragment, so read around it before you answer:
 
 - **At the default `access` `all`, nothing asks, so you must.** `slack_search_public_and_private`, `slack_read_file`, `slack_read_channel` with a user ID or a `D…` ID, and `slack_list_user_channels` with `types` that include `im` or `mpim` all run without a prompt. Ask the user before you read private content, and say which tool you will use.
 - **When the user restricts it:** with `access: "ask-changes"` OpenCode asks before the private search and file reads, and before every write; with `"read-only"` it denies them. `/slack-status` shows what the access allows.
-- **The default scopes refuse private search:** Slack answers `missing_scope` even after the user approves. Say that DMs and private channels were not searched, and point to the `Scopes` row of `/slack-status`; the missing scopes are `search:read.private`, `search:read.im` and `search:read.mpim`.
-- **A decline is final:** don't retry, and don't reach the same content another way. Continue with public results, and say what was not searched. If you tell the user how to run it later, add that the default scopes would refuse it anyway, and point to the `Scopes` row of `/slack-status`.
+- **The defaults read private content:** `search:read.private`, `search:read.im` and `search:read.mpim` are in the default scopes, so private search works, and `im:history` and `mpim:history` cover direct and group message history. Private channel history needs `groups:history`, which is not a default: a private channel read may answer `missing_scope`. Ask first (above). If Slack answers `missing_scope`, say what was not searched and point at the `Scopes` row of `/slack-status`.
+- **A decline is final:** don't retry, and don't reach the same content another way. Continue with public results, and say what was not searched. If you tell the user how to run it later, say what the scopes allow and point at the `Scopes` row of `/slack-status`.
 
 ## 3. Answer and cite
 

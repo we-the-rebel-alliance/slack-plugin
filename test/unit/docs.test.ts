@@ -8,7 +8,7 @@ import { parameters, SLACK_SCHEMAS } from "../host/slack-catalog.js"
 import { parseOptions } from "../../src/options.js"
 import { buildStatus, statusRows } from "../../src/status.js"
 import { classify, NAMESPACE_DESCRIPTION } from "../../src/tools.js"
-import { TESTED_HOSTS } from "../../src/defaults.js"
+import { DEFAULT_SCOPES, TESTED_HOSTS } from "../../src/defaults.js"
 import { defaultRules } from "../../src/permissions.js"
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url))
@@ -180,6 +180,20 @@ describe("the catalog the fake Slack server serves", () => {
   test("the tools RPC's status method is a script method only, so the jelly declaration does not declare it", () => {
     const jelly = JSON.parse(read("package.json")) as { jelly: { tools: { name: string; permission?: string }[] } }
     expect(jelly.jelly.tools.filter((tool) => tool.name.endsWith(".status") || tool.permission === "slack_status")).toEqual([])
+  })
+})
+
+// The sign-in and the app manifest must agree: the manifest is what someone pastes into Slack, and a scope the plugin
+// asks for but the manifest omits makes the default sign-in fail with Slack's missing_scope.
+describe("the default sign-in scopes", () => {
+  const manifest = JSON.parse(read("docs/slack-app-manifest.json")) as { oauth_config: { scopes: { user: string[] } } }
+
+  test("include the direct and group message history the source reads", () => {
+    for (const scope of ["search:read.im", "search:read.mpim", "im:history", "mpim:history"]) expect(DEFAULT_SCOPES).toContain(scope)
+  })
+
+  test("the app manifest requests exactly DEFAULT_SCOPES as its user scopes", () => {
+    expect([...manifest.oauth_config.scopes.user].sort()).toEqual([...DEFAULT_SCOPES].sort())
   })
 })
 

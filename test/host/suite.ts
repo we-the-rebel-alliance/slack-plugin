@@ -94,7 +94,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect((await probe("defaults")).registered).toStrictEqual({
           type: "remote",
           url: "https://mcp.slack.com/mcp",
-          oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim" },
+          oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history" },
         })
       })
 
@@ -561,7 +561,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect((await probe("hosted")).registered).toStrictEqual({
           type: "remote",
           url: "https://mcp.slack.com/mcp",
-          oauth: { client_id: CLIENT_ID, ...HOSTED_OAUTH, scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim" },
+          oauth: { client_id: CLIENT_ID, ...HOSTED_OAUTH, scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history" },
         })
         expect(await status("hosted")).toMatchObject({ state: "disabled", callback: HOSTED_OAUTH.redirect_uri, callbackPort: HOSTED_OAUTH.callback_port })
         expect((await host.client.integration.list(at("hosted"))).data.map((item) => item.id)).not.toContain("slack-app")
@@ -591,7 +591,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect(registered).toStrictEqual({
           type: "remote",
           url: "https://mcp.slack.com/mcp",
-          oauth: { client_id: "CONNECT_CLIENT_ID", redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim" },
+          oauth: { client_id: "CONNECT_CLIENT_ID", redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:history mpim:history" },
         })
         expect(await status("connect")).toMatchObject({ client: { id: "CONNECT_CLIENT_ID", mode: "public_pkce", source: "connect" } })
         const id = (await host.client.mcp.list(at("connect"))).data.find((server) => server.name === "slack")?.integrationID
