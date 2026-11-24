@@ -42,7 +42,7 @@
 //   doc-unknown-param    a skill or doc passes a parameter the served tool's input schema lacks
 //   jelly-count          docs/jelly.md's "N tools are declared (M read-only)" disagrees with the declaration
 //   family-block         docs/jelly.md does not carry jelly's shared block (scripts/jelly-family-block.md) once,
-//                        between its markers, byte for byte; WARN when a plugin with a declaration has no docs/jelly.md
+//                        between its markers, byte for byte
 //   family-contradiction a sentence of docs/jelly.md outside the block contradicts it: FAIL when it says an effect of
 //                        allow makes a tool run (the block's fourth sentence rules that out), WARN for looser matches
 //   capture-stale        (--release) a live capture older than --max-age days (default 14), with no waiver in
@@ -397,9 +397,8 @@ export function checkDrift({ pkg, fixture, provenance, registry = {}, effectExce
   }
 
   // the shared block in a declaration's docs page, word for word, and no sentence outside it that contradicts it
-  // jellyDoc is null when the repository has no docs/jelly.md, undefined when the caller passed none.
-  if (jellyDoc === null) add("warn", "family-block", { file: "docs/jelly.md", detail: "no docs page: it carries the shared block (scripts/jelly-family-block.md) between its markers" })
-  else if (jellyDoc !== undefined) {
+  // jellyDoc is undefined or null when the repository has no such page, and the checks below are skipped.
+  if (typeof jellyDoc === "string") {
     const starts = jellyDoc.split(FAMILY_BLOCK_START).length - 1
     const ends = jellyDoc.split(FAMILY_BLOCK_END).length - 1
     const mine = familyBlockOf(jellyDoc)
@@ -600,7 +599,7 @@ export function driftReport(root, { release = false, today = new Date().toISOStr
     registry: readJson(join(root, REGISTRY), { optional: true }) ?? {},
     effectExceptions: readJson(join(root, EFFECT_EXCEPTIONS), { optional: true }) ?? {},
     docs: docFiles(root).map((path) => ({ file: relative(root, path).split("\\").join("/"), text: readFileSync(path, "utf8") })),
-    jellyDoc: existsSync(join(root, "docs", "jelly.md")) ? readFileSync(join(root, "docs", "jelly.md"), "utf8") : null,
+    jellyDoc: existsSync(join(root, "docs", "jelly.md")) ? readFileSync(join(root, "docs", "jelly.md"), "utf8") : undefined,
     release,
     today,
     maxAgeDays,

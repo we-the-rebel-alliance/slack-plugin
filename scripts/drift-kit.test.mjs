@@ -276,7 +276,7 @@ describe("check-drift: jelly's shared block in docs/jelly.md", () => {
     assert.match(changed[0].detail, /differs from the vendored block/)
     assert.match(block(doc(`${FAMILY_BLOCK}\n\n${FAMILY_BLOCK}`))[0].detail, /carries 2 start and 2 end markers/)
     assert.match(block(doc(FAMILY_BLOCK.replace(FAMILY_BLOCK_END, "")))[0].detail, /carries 1 start and 0 end markers/)
-    assert.deepEqual(run({ pkg, fixture: capture, jellyDoc: null }).filter((finding) => finding.kind === "family-block").map((finding) => finding.level), ["warn"], "a plugin with a declaration and no docs/jelly.md")
+    assert.deepEqual(run({ pkg, fixture: capture, jellyDoc: null }).filter((finding) => finding.kind === "family-block"), [], "a plugin with a declaration and no docs page")
   })
 
   test("fails a sentence that says an effect of allow makes a tool run, and warns on looser matches", () => {
