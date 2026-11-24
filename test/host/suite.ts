@@ -1,5 +1,5 @@
 // The host test, run against every host in embedded.test.ts and binary.test.ts. It checks what the plugin
-// registers on a real OpenCode host, and the permission results V1-V6 from the plan (ISSUE §3.4).
+// registers on a real OpenCode host, and the permission results V1-V6.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
@@ -58,10 +58,9 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
     }
 
     /**
-     * Runs `code` as Code Mode does, through a schedule's check program up to 2.3.0 and a stock server's automation
-     * code action from 2.3.1: OpenCode checks each tool's input and output and evaluates permissions with nobody present
-     * to answer a prompt. The program reports by throwing "SEEN <json>", so nothing is left behind and no model is
-     * involved.
+     * Runs `code` as Code Mode does, through a stock server's automation code action: OpenCode checks each tool's input
+     * and output and evaluates permissions with nobody present to answer a prompt. The program reports by throwing
+     * "SEEN <json>", so nothing is left behind and no model is involved.
      */
     async function codeMode(project: Project, sessionID: string, code: string): Promise<{ seen: unknown } | { refused: string }> {
       const outcome = await unattended(host, sessionID, code, at(project))
@@ -95,7 +94,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect((await probe("defaults")).registered).toStrictEqual({
           type: "remote",
           url: "https://mcp.slack.com/mcp",
-          oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:read im:history mpim:read mpim:history" },
+          oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim" },
         })
       })
 
@@ -106,7 +105,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
           tools: { read: 12, private: 1, file: 1, write: 13, unknown: 1, unknownNames: ["slack_brand_new_tool"] },
           unguardedAgents: ["custom"],
           version: PACKAGE_VERSION,
-          host: { version: host.version, range: ">=2.2.3 <2.4.0", tested: true },
+          host: { version: host.version, range: ">=2.4.1 <2.5.0", tested: true },
           client: { id: CLIENT_ID, mode: "public_pkce" },
           // OpenCode lists the bundled skill under the path the plugin gave, so it is not reported as shadowed.
           shadowedSkills: [],
@@ -120,7 +119,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect(text).toStartWith("Slack\nConnection: connected. ")
         expect(text).toContain(`Client: ${CLIENT_ID} (public, PKCE; set in plugin options)`)
         expect(text).toContain('Agents without default rules: custom\n[\n  { "action": "slack_*", "resource": "*", "effect": "allow" },')
-        expect(text).toContain(`OpenCode: ${host.version} (tested; supported range >=2.2.3 <2.4.0)`)
+        expect(text).toContain(`OpenCode: ${host.version} (tested; supported range >=2.4.1 <2.5.0)`)
       })
 
       test("the slack-search skill is registered", async () => {
@@ -212,14 +211,13 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
       test("describes every known tool with its class and live schema, and the plugin's own methods; no unknown tool is a method", async () => {
         const { value } = await script("describe", {})
         expect(value.id).toBe(TOOLS_RPC_ID)
-        expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...METHODS.map((method) => method.name), "events_list", "probe", "thread_read", "channels_list", "mentions_list", "dms_list", "mark_read", "status"])
-        expect(value.methods.slice(-8)).toMatchObject([
+        expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...METHODS.map((method) => method.name), "events_list", "probe", "thread_read", "channels_list", "mentions_list", "mark_read", "status"])
+        expect(value.methods.slice(-7)).toMatchObject([
           { name: "events_list", kind: "plugin", class: "read", action: "slack_events_list", available: true },
           { name: "probe", kind: "plugin", class: "read", action: "slack_probe", available: true },
           { name: "thread_read", kind: "plugin", class: "read", action: "slack_slack_read_thread", available: true },
           { name: "channels_list", kind: "plugin", class: "read", action: "slack_channels_list", available: true },
           { name: "mentions_list", kind: "plugin", class: "read", action: "slack_mentions_list", available: true },
-          { name: "dms_list", kind: "plugin", class: "read", action: "slack_dms_list", available: true },
           { name: "mark_read", kind: "plugin", class: "write", action: "slack_mark_read", available: true },
           { name: "status", kind: "plugin", class: "read", action: "slack_status", available: true },
         ])
@@ -293,7 +291,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
 
       test("describe with a session reports each method's permission; without one it omits it", async () => {
         const { value } = await script("describe", { sessionID: sessions.build })
-        const expected = Object.fromEntries([...METHODS.map((method) => [method.name, "allow"]), ["events_list", "allow"], ["probe", "allow"], ["thread_read", "allow"], ["channels_list", "allow"], ["mentions_list", "allow"], ["dms_list", "allow"], ["mark_read", "allow"], ["status", "allow"]])
+        const expected = Object.fromEntries([...METHODS.map((method) => [method.name, "allow"]), ["events_list", "allow"], ["probe", "allow"], ["thread_read", "allow"], ["channels_list", "allow"], ["mentions_list", "allow"], ["mark_read", "allow"], ["status", "allow"]])
         expect(Object.fromEntries(value.methods.map((method: { name: string; permission: string }) => [method.name, method.permission]))).toEqual(expected)
         const plain = (await script("describe", {})).value
         expect(plain.methods.every((method: object) => !Object.hasOwn(method, "permission"))).toBe(true)
@@ -350,7 +348,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
       // events_list and probe name the account from status's auth.test (source-contract: content reads never assert the
       // identity read). This host has no Slack sign-in, so neither calls a Slack tool, and probe's own identity read
       // reaches the fake, whose answer is not a profile.
-      test("events_list, probe, mentions_list and dms_list name the account from auth.test, and check their input first", async () => {
+      test("events_list, probe and mentions_list name the account from auth.test, and check their input first", async () => {
         const from = host.toolCalls().length
         const result = await run("build", "events_list", {})
         expect(result).toMatchObject({ type: "failed", code: "UNAVAILABLE" })
@@ -358,10 +356,9 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect(await run("build", "events_list", { limit: 0 })).toMatchObject({ type: "failed", code: "INPUT_INVALID" })
         expect(await run("build", "probe", { scope: {} })).toMatchObject({ type: "failed", code: "INPUT_INVALID" })
         expect(await run("build", "probe", {})).toMatchObject({ type: "failed", code: "UNAVAILABLE" })
-        // The Web API sources check their input first, then need the same account; this host has no Slack sign-in.
-        expect(await run("build", "dms_list", { limit: 0 })).toMatchObject({ type: "failed", code: "INPUT_INVALID" })
+        // The Web API source checks its input first, then needs the same account; this host has no Slack sign-in.
+        expect(await run("build", "mentions_list", { scope: {} })).toMatchObject({ type: "failed", code: "INPUT_INVALID" })
         expect(await run("build", "mentions_list", {})).toMatchObject({ type: "failed", code: "UNAVAILABLE" })
-        expect(await run("build", "dms_list", {})).toMatchObject({ type: "failed", code: "UNAVAILABLE" })
         expect(since(from)).toEqual([])
       })
 
@@ -395,45 +392,66 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
       })
     })
 
-    // R2: the same proofs on the Code Mode path, inside the host's `execute`, where nobody can answer a prompt.
+    // R2: the same proofs on the Code Mode path, inside the host's `execute`, where nobody can answer a prompt. Only a
+    // stock `opencode serve` runs automations; the embedded @opencode/sdk host never starts the scheduler (OpenCode 2.4),
+    // so there the same session rules are asserted over the tools RPC, where an ask is refused for the same reason.
     test("R2 Code Mode: a read runs; an ask and a deny are refused with nothing sent; an unknown name is refused", async () => {
       await discovered("defaults")
       const created = async (permissions?: Rule[]) =>
         (await host.client.session.create({ title: "code mode", agent: "build", ...at("defaults"), ...(permissions ? { permissions } : {}) } as never)).id
       const run = (sessionID: string, tool: string) =>
         codeMode("defaults", sessionID, `const r = await tools.slack[${JSON.stringify(tool)}]({}); throw new Error("SEEN " + JSON.stringify(r))`)
+      // The tools RPC path, for the embedded host: its own session and rules, and the same refusal.
+      const viaRpc = async (tool: string, permissions?: Rule[]): Promise<{ refused?: string; seen?: unknown }> => {
+        const sessionID = await created(permissions)
+        try {
+          return { seen: await call(TOOLS_RPC_ID, tool, "defaults", { sessionID, input: {} }) }
+        } catch (error) {
+          return { refused: String((error as { message?: unknown }).message ?? error) }
+        }
+      }
 
       const READ = "slack_read_user_profile"
       const before = host.toolCalls().length
-      expect(await run(await created(), READ)).toHaveProperty("seen")
+      if (host.automations) {
+        expect(await run(await created(), READ)).toHaveProperty("seen")
+      } else {
+        expect(await viaRpc(READ)).toHaveProperty("seen")
+      }
       expect(host.toolCalls().slice(before)).toEqual([READ])
 
       // An ask is refused before the tool runs: nothing reaches Slack and no prompt is left waiting.
       const asking = host.toolCalls().length
-      const askSession = await created([{ action: "slack_slack_read_user_profile", resource: "*", effect: "ask" }])
-      const asked = await run(askSession, READ)
+      const askRules: Rule[] = [{ action: "slack_slack_read_user_profile", resource: "*", effect: "ask" }]
+      const askSession = await created(askRules)
+      const asked = host.automations ? await run(askSession, READ) : await viaRpc(READ, askRules)
       expect(asked).toHaveProperty("refused")
-      expect((asked as { refused: string }).refused).toMatch(/needs approval|nobody is present|not permitted|declined|ask/i)
+      expect((asked as { refused: string }).refused).toMatch(/needs approval|nobody is present|not permitted|declined|would ask|ask/i)
       expect(host.toolCalls().slice(asking)).toEqual([])
       expect(await host.client.permission.list({ sessionID: askSession, ...at("defaults") })).toEqual([])
 
-      const denied = await run(await created([{ action: "slack_slack_read_user_profile", resource: "*", effect: "deny" }]), READ)
+      const denyRules: Rule[] = [{ action: "slack_slack_read_user_profile", resource: "*", effect: "deny" }]
+      const denied = host.automations ? await run(await created(denyRules), READ) : await viaRpc(READ, denyRules)
       expect(denied).toHaveProperty("refused")
-      const unknown = await run(await created(), "no_such_tool")
+      const unknown = host.automations ? await run(await created(), "no_such_tool") : await viaRpc("no_such_tool")
       expect(unknown).toHaveProperty("refused")
       expect(host.toolCalls().slice(asking)).toEqual([])
     })
 
-    // R2, per class: each restricted access value refuses its own class on the Code Mode path, with nothing sent.
-    test("R2 Code Mode, per class: at ask-changes a send is refused with nothing sent, and at read-only a private search is denied", async () => {
+    // R2, per class: each restricted access value refuses its own class, with nothing sent.
+    test("R2, per class: at ask-changes a send is refused with nothing sent, and at read-only a private search is denied", async () => {
       const before = host.toolCalls().length
       await discovered("accessAsk")
       const asking = (await host.client.session.create({ title: "code mode per class", agent: "build", ...at("accessAsk") } as never)).id
-      const sent = await codeMode("accessAsk", asking, `const r = await tools.slack["slack_send_message"]({ channel_id: "C0123ABCD45", text: "hi" }); throw new Error("SEEN " + JSON.stringify(r))`)
+      const sent = host.automations
+        ? await codeMode("accessAsk", asking, `const r = await tools.slack["slack_send_message"]({ channel_id: "C0123ABCD45", text: "hi" }); throw new Error("SEEN " + JSON.stringify(r))`)
+        : await call(TOOLS_RPC_ID, "slack_send_message", "accessAsk", { sessionID: asking, input: { channel_id: "C0123ABCD45", text: "hi" } }).then(() => ({ seen: true }), (error: { message?: string }) => ({ refused: error.message ?? String(error) }))
       expect(sent).toHaveProperty("refused")
       await discovered("accessReadOnly")
       const denying = (await host.client.session.create({ title: "code mode per class", agent: "build", ...at("accessReadOnly") } as never)).id
-      const searched = await codeMode("accessReadOnly", denying, `const r = await tools.slack["slack_search_public_and_private"]({ query: "q" }); throw new Error("SEEN " + JSON.stringify(r))`)
+      const searched = host.automations
+        ? await codeMode("accessReadOnly", denying, `const r = await tools.slack["slack_search_public_and_private"]({ query: "q" }); throw new Error("SEEN " + JSON.stringify(r))`)
+        : await call(TOOLS_RPC_ID, "slack_search_public_and_private", "accessReadOnly", { sessionID: denying, input: { query: "q" } }).then(() => ({ seen: true }), (error: { message?: string }) => ({ refused: error.message ?? String(error) }))
       expect(searched).toHaveProperty("refused")
       expect(host.toolCalls().slice(before)).toEqual([])
     })
@@ -543,7 +561,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect((await probe("hosted")).registered).toStrictEqual({
           type: "remote",
           url: "https://mcp.slack.com/mcp",
-          oauth: { client_id: CLIENT_ID, ...HOSTED_OAUTH, scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:read im:history mpim:read mpim:history" },
+          oauth: { client_id: CLIENT_ID, ...HOSTED_OAUTH, scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim" },
         })
         expect(await status("hosted")).toMatchObject({ state: "disabled", callback: HOSTED_OAUTH.redirect_uri, callbackPort: HOSTED_OAUTH.callback_port })
         expect((await host.client.integration.list(at("hosted"))).data.map((item) => item.id)).not.toContain("slack-app")
@@ -573,7 +591,7 @@ export function hostSuite(name: string, start: () => Promise<Host>): void {
         expect(registered).toStrictEqual({
           type: "remote",
           url: "https://mcp.slack.com/mcp",
-          oauth: { client_id: "CONNECT_CLIENT_ID", redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:read im:history mpim:read mpim:history" },
+          oauth: { client_id: "CONNECT_CLIENT_ID", redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim" },
         })
         expect(await status("connect")).toMatchObject({ client: { id: "CONNECT_CLIENT_ID", mode: "public_pkce", source: "connect" } })
         const id = (await host.client.mcp.list(at("connect"))).data.find((server) => server.name === "slack")?.integrationID

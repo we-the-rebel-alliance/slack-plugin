@@ -1,7 +1,7 @@
 // Pack, install and import the published shape; with PACK_TARBALL (or SLACK_PACK_TARBALL) set, the release's own tarball instead. The
 // tarball holds exactly the files whitelist and installs with scripts disabled and no dependencies. Installed alone,
 // it loads in each stock OpenCode release, which provides @opencode/plugin itself. Next to the host packages
-// OpenCode 2.2.3 ships, both entry points import under Bun.
+// OpenCode 2.4.1 provides to plugins, both entry points import under Bun.
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { spawnSync } from "node:child_process"
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
@@ -31,10 +31,10 @@ afterAll(() => {
 }, { timeout: 120_000 })
 
 const MAX_ENTRIES = 50
-// 224 KiB: Slack's logo PNGs, source-contract's events, cursor and tools-rpc modules bundled into dist/index.js, and
-// package.json's three sources with their reads, the Web API sources and their docs (160 KiB before source-contract).
+// 224 KiB: Slack's logo PNGs, the source contract's events, cursor and tools-rpc modules bundled into dist/index.js,
+// and package.json's two sources with their reads (200 KiB before the contract).
 const MAX_UNPACKED_BYTES = 224 * 1024
-// The host packages OpenCode 2.2.3 provides to plugins, at the versions pinned for development.
+// The host packages OpenCode 2.4.1 provides to plugins, at the versions pinned for development.
 const HOST_PACKAGES = ["@opencode/plugin", "@opentui/core", "@opentui/solid", "solid-js"]
 const SERVER_MODULES = [/^node:/, /^@opencode\/plugin(?:\/|$)/]
 const TUI_MODULES = [...SERVER_MODULES, /^@opentui\/(?:core|solid)(?:\/|$)/, /^solid-js(?:\/|$)/]
@@ -136,7 +136,7 @@ describe("the tarball", () => {
     const { files, entryCount, unpackedSize } = pack()
     const paths = files.map((file) => file.path).sort()
     expect(paths).toEqual(expectedFiles())
-    // The assets are Jelly's icon and the two PNG sizes the icon contract declares.
+    // The assets are the Slack mark and the two PNG sizes the icon contract declares.
     expect(paths.filter((path) => path.startsWith("assets/"))).toEqual(["assets/icon-128.png", "assets/icon-256.png", "assets/icon.svg"])
     expect(paths.filter((path) => /\.(?:tsx|jsx)$/.test(path) || path.includes("node_modules/"))).toEqual([])
     for (const target of Object.values(pkg.exports)) expect(paths).toContain(target.replace(/^\.\//, ""))
@@ -149,7 +149,7 @@ describe("the tarball", () => {
   test("has no dependencies, peers or install scripts, and states the tested host range", () => {
     installAlone()
     const manifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8")) as Record<string, unknown>
-    expect(manifest.opencode).toMatchObject({ host: ">=2.2.3 <2.4.0", vendor: { id: "slack", name: "Slack", domain: "slack.com" } })
+    expect(manifest.opencode).toMatchObject({ host: ">=2.4.1 <2.5.0", vendor: { id: "slack", name: "Slack", domain: "slack.com" } })
     expect((manifest.opencode as { icons: { src: string }[] }).icons.map((icon) => icon.src))
       .toEqual(["assets/icon.svg", "assets/icon-128.png", "assets/icon-256.png"])
     for (const field of ["dependencies", "peerDependencies", "peerDependenciesMeta", "optionalDependencies", "bundleDependencies", "bundledDependencies"]) {
@@ -192,7 +192,7 @@ describe.each(HOST_VERSIONS)("the installed package on stock opencode %s", (vers
     try {
       const location = host.location("defaults")
       const status = (await host.client.rpc.call({ rpcID: "slack.workspace", method: "status", location, input: {} })).output as Status
-      expect(status).toMatchObject({ version: pkg.version, host: { version, range: ">=2.2.3 <2.4.0", tested: true }, client: { id: CLIENT_ID } })
+      expect(status).toMatchObject({ version: pkg.version, host: { version, range: ">=2.4.1 <2.5.0", tested: true }, client: { id: CLIENT_ID } })
       const plugin = (await host.client.plugin.list({ location })).data.find((item) => item.id === "slack.workspace")
       // exports has no ./rpc, so OpenCode lists no RPC part; the server part registers the status RPC above.
       expect(plugin).toMatchObject({ state: { status: "active" }, features: { server: true, tui: true }, source: { path: installed } })
@@ -203,7 +203,7 @@ describe.each(HOST_VERSIONS)("the installed package on stock opencode %s", (vers
       expect(state.registered).toEqual({
         type: "remote",
         url: "https://mcp.slack.com/mcp",
-        oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim im:read im:history mpim:read mpim:history" },
+        oauth: { client_id: CLIENT_ID, redirect_uri: "http://localhost:8765/callback", scope: "channels:history channels:read search:read.public users:read search:read.private search:read.im search:read.mpim" },
       })
       const rules = defaultRules()
       const build = state.agents.find((agent) => agent.id === "build")
@@ -211,7 +211,7 @@ describe.each(HOST_VERSIONS)("the installed package on stock opencode %s", (vers
       expect(build?.permissions.slice(at + 1, at + 1 + rules.length)).toEqual(rules)
       expect((await host.client.skill.list({ location })).data.map((skill) => skill.id)).toContain("slack-search")
       const tools = (await host.client.rpc.call({ rpcID: TOOLS_RPC_ID, method: "describe", location, input: {} })).output as { methods: { name: string }[] }
-      expect(tools.methods.map((method) => method.name)).toEqual([...METHODS.map((method) => method.name), "events_list", "probe", "thread_read", "channels_list", "mentions_list", "dms_list", "mark_read", "status"])
+      expect(tools.methods.map((method) => method.name)).toEqual([...METHODS.map((method) => method.name), "events_list", "probe", "thread_read", "channels_list", "mentions_list", "mark_read", "status"])
       const paths = (await host.client.rpc.call({ rpcID: "slack.test.probe", method: "paths", location, input: {} })).output as Record<string, string>
       expect(Object.keys(paths).length).toBeGreaterThan(0)
       expect(Object.entries(paths).filter(([, path]) => !path.startsWith(host.root + sep))).toEqual([])

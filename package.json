@@ -1,21 +1,19 @@
 {
-  "name": "@joe-broadhead/opencode-slack",
-  "version": "0.0.7",
+  "name": "@we-the-rebel-alliance/slack-plugin",
+  "version": "0.0.0",
   "private": true,
-  "description": "Unofficial OpenCode plugin for Slack",
+  "description": "OpenCode plugin for Slack: search, read, send and script messages, threads, channels, people, canvases, lists and files",
   "keywords": [
     "opencode",
     "opencode-plugin",
+    "plugin-contract",
     "slack"
   ],
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/joe-broadhead/opencode-slack.git"
-  },
-  "homepage": "https://github.com/joe-broadhead/opencode-slack#readme",
+  "repository": "github:we-the-rebel-alliance/slack-plugin",
+  "homepage": "https://github.com/we-the-rebel-alliance/slack-plugin#readme",
   "bugs": {
-    "url": "https://github.com/joe-broadhead/opencode-slack/issues"
+    "url": "https://github.com/we-the-rebel-alliance/slack-plugin/issues"
   },
   "type": "module",
   "exports": {
@@ -36,7 +34,7 @@
     "CHANGELOG.md"
   ],
   "opencode": {
-    "host": ">=2.2.3 <2.4.0",
+    "host": ">=2.4.1 <2.5.0",
     "icons": [
       {
         "src": "assets/icon.svg",
@@ -85,16 +83,17 @@
   "devDependencies": {
     "@babel/core": "7.29.7",
     "@babel/preset-typescript": "7.27.1",
-    "@opencode/client": "2.2.3",
-    "@opencode/plugin": "2.2.3",
-    "@opencode/sdk": "2.2.3",
-    "@opencode/util": "2.2.3",
+    "@opencode/client": "2.4.1",
+    "@opencode/plugin": "2.4.1",
+    "@opencode/sdk": "2.4.1",
+    "@opencode/util": "2.4.1",
     "@opentui/core": "0.8.0",
     "@opentui/solid": "0.8.0",
     "@types/babel__core": "7.20.5",
     "@types/bun": "1.4.3",
-    "@we-the-rebel-alliance/source-contract": "github:we-the-rebel-alliance/source-contract#v0.3.0",
+    "@we-the-rebel-alliance/source-contract": "github:we-the-rebel-alliance/source-contract#2fd55cdc0c6c1067927fefc403a88bfd18c9a971",
     "babel-preset-solid": "1.9.16",
+    "effect": "4.1.0",
     "esbuild": "0.28.2",
     "solid-js": "1.9.17",
     "typescript": "5.9.3"
@@ -174,46 +173,6 @@
           "operations": [
             "slack_read_user_profile",
             "assistant.search.context"
-          ],
-          "identity": [
-            "slack_read_user_profile"
-          ]
-        },
-        "private": true,
-        "cost": {
-          "class": "free"
-        },
-        "maxBytes": 65536,
-        "urlHosts": [
-          "*.slack.com"
-        ]
-      },
-      {
-        "id": "slack.dms",
-        "kind": "snapshot",
-        "tool": "dms_list",
-        "output": "inbox",
-        "input": {
-          "source": "dms"
-        },
-        "params": {
-          "since": {
-            "relative": true
-          },
-          "limit": {}
-        },
-        "accounts": {
-          "named": false
-        },
-        "permission": {
-          "tool": "slack_dms_list",
-          "operations": [
-            "slack_read_user_profile",
-            "users.conversations",
-            "conversations.info",
-            "conversations.history",
-            "conversations.members",
-            "users.info"
           ],
           "identity": [
             "slack_read_user_profile"
@@ -427,7 +386,7 @@
           "metadataOption": "oauth.auth_server_metadata_url"
         },
         "help": {
-          "url": "https://github.com/joe-broadhead/opencode-slack/blob/HEAD/docs/slack-app-manifest.json",
+          "url": "https://github.com/we-the-rebel-alliance/slack-plugin/blob/master/docs/slack-app-manifest.json",
           "label": "Create the Slack app from its manifest, then paste its client ID"
         }
       },
@@ -438,10 +397,6 @@
         "scopes": [
           "channels:history",
           "channels:read",
-          "im:history",
-          "im:read",
-          "mpim:history",
-          "mpim:read",
           "search:read.im",
           "search:read.mpim",
           "search:read.private",

@@ -48,6 +48,11 @@ if (import.meta.main) {
       }
       case "ping":
         return reply({})
+      // OpenCode 2.4 probes an MCP server that names no protocol with `server/discover` before the legacy handshake
+      // (@modelcontextprotocol/client: `classifyRpcError` reads an unrecognised method as "legacy" and follows with
+      // `initialize`). This server refuses the probe cleanly, as a pre-2026 server does.
+      case "server/discover":
+        return send({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found" } })
       default:
         return send({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found" } })
     }
