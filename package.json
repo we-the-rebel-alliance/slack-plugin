@@ -33,7 +33,8 @@
     "test:pack": "node --test test/pack/*.test.ts",
     "conformance": "plugin-kit check",
     "docs": "plugin-kit docs",
-    "check": "npm run typecheck && npm run build && npm test && npm run test:pack && plugin-kit check"
+    "check": "npm run typecheck && npm run build && npm test && npm run test:pack && npm run actionlint && plugin-kit check",
+    "actionlint": "actionlint -color"
   },
   "capabilities": {
     "version": 1,
