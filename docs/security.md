@@ -38,8 +38,9 @@ Two powers are deliberately not default:
 ## Access and confirmation
 
 `access` is the ceiling and the contract enforces it: `read` methods run at every level, a `write` asks at `ask-changes`
-and is off at `read-only`, and a method's `effect: deny` narrows it further. `mentions_list`, Slack's private search and
-Slack's file read are denied at `ask-changes` and `read-only`.
+and is off at `read-only`, and a method's `effect` narrows it further. `mentions_list`, Slack's private search and
+Slack's file read carry `effect: deny`, so they are denied at every level, `all` included; a later allow rule for one
+agent or tool is the only way to run one.
 
 A non-read call over RPC needs a confirmation: an OpenCode ask, or a host-signed action grant bound to the method, the
 account, the manifest hash and the exact input. An allow rule alone is not a confirmation. The plugin declares no

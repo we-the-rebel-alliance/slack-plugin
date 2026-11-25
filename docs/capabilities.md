@@ -7,12 +7,12 @@ The manifest in `package.json` is the source of truth; this page adds what each 
 
 | Method | Class | Accounts | Operations |
 |---|---|---|---|
-| `status` | read | none | — |
-| `probe` | read | optional | `auth.test` |
-| `events_list` | read | optional | `auth.test`, `slack_read_user_profile`, `slack_read_channel`, `slack_read_thread` |
+| `status` | read | none | `auth.test` |
+| `probe` | read | optional | `auth.test`, `slack_read_user_profile` |
+| `events_list` | read | optional | `auth.test`, `slack_read_channel` |
 | `thread_read` | read | optional | `auth.test`, `slack_read_thread` |
 | `channels_list` | read | optional | `slack_list_user_channels` |
-| `mentions_list` | read | optional | `auth.test`, `slack_read_user_profile`, `assistant.search.context` |
+| `mentions_list` | read | optional | `auth.test`, `assistant.search.context` |
 | `mark_read` | write | optional | `conversations.mark` |
 | `mcp:slack_add_list_record` | write | optional | — |
 | `mcp:slack_add_reaction` | write | optional | — |
@@ -76,11 +76,11 @@ past it.
 | Method | Reads | Notes |
 |---|---|---|
 | `status` | nothing | The versions, each alias's state and owner, the agents the access rules miss. |
-| `probe` | `auth.test` | The account and owner, with `orgs` naming the workspace and, on a grid, the organization. No content. |
+| `probe` | `auth.test` (the profile read is declared for the inventory, not called) | The account and owner, with `orgs` naming the workspace and, on a grid, the organization. No content. |
 | `events_list` | the workspace source | Oldest first; the cursor is bound to the account and scope. |
 | `thread_read` | a listed event's thread | The source's detail read. A thread over the source's limit is `TOO_LARGE`, never cut. |
 | `channels_list` | the account's conversations | Ids and names only, for a scope a person confirms. |
-| `mentions_list` | `assistant.search.context` | The user's mentions, oldest first. `effect: deny` keeps it off unless a person allows it. |
+| `mentions_list` | `assistant.search.context` | The user's mentions, oldest first. `effect: deny` keeps it off at every level unless a later allow rule names it. |
 | `mark_read` | nothing; writes | `conversations.mark` for one conversation. Emits `changed` for `slack.workspace` after the write. |
 
 ## Slack's tools, passed through
@@ -94,9 +94,9 @@ does: `slack_complete_file_upload` is `send` (with a channel it shares the file 
 ## The three narrow reads
 
 `mentions_list`, `slack_search_public_and_private` and `slack_read_file` reach private content or another person's file.
-The plugin's table gives them `effect: deny`: at `ask-changes` and `read-only` they do not run, and a person who wants
-one raises the access level or allows the tool for one agent. This is narrower than asking at `ask-changes`, and it is
-the choice the plugin makes on purpose.
+The plugin's table gives them `effect: deny`, so they are denied at every level, `all` included: raising `access` does
+not run one, and a later allow rule for one agent or tool is the only way to. That is narrower than asking at
+`ask-changes`, and it is the choice the plugin makes on purpose.
 
 ## The bus
 

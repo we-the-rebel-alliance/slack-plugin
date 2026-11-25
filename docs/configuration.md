@@ -63,7 +63,8 @@ or `mpim:write`), which is not a default either.
 
 ## Access
 
-`access` is `all` (the default), `ask-changes` or `read-only`. It is the ceiling; no option widens it. `allowUntestedHost`
+`access` is `all` (the default), `ask-changes` or `read-only`. It is the ceiling; no option widens it. A method's `effect: deny`
+is denied at every level, `all` included, until a later allow rule names it for one agent or tool. `allowUntestedHost`
 lets the plugin start outside `>=2.4.1 <2.5.0`; leave it off.
 
 ## Accounts

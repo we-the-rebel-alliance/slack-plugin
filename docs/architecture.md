@@ -9,7 +9,7 @@
 | Accounts | `src/accounts.ts` | The global Slack-app sign-in, one MCP server per alias, the alias's scopes and redirect. |
 | Provider | `src/provider/` | The two endpoints, the MCP tool call and the Web API call. |
 | Handlers | `src/handlers/` | One file per method, every provider call behind `SlackProvider`, and Slack's two answer shapes parsed into contract events. |
-| Skills | `skills/slack-search/` | The workflow an agent follows. |
+| Skills | `skills/slack/`, `skills/slack-search/` | The main skill (accounts, access, errors) and the search/read workflow. |
 
 `src/index.ts` never adds a tool, an RPC method or a permission rule. `register` reads the manifest and the handler table,
 and wires the agent tool, Code Mode, the RPC and the bus from them. The access rules are generated from `access` and each

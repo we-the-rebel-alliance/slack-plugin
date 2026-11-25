@@ -2,7 +2,8 @@
 
 Reads and acts on Slack from OpenCode: search messages, read a channel, a thread or a person, list conversations, create
 and update canvases and lists, send and schedule messages, and mark a conversation read. It signs in to several Slack
-workspaces at once, one per account alias, and every method takes the alias it should use.
+workspaces at once, one per account alias. Every method that reads or writes Slack takes the alias it should use;
+`status` takes none, and Slack's pass-through tools use their alias's server rather than an `account` input.
 
 Slack's own MCP tools are passed through as they are: their server holds the sign-in and the plugin never proxies one.
 The plugin's own reads and its one write use the same account's sign-in.
@@ -76,10 +77,11 @@ examples.
 | `ask-changes` | run | ask first |
 | `read-only` | run | never run |
 
-Three reads are narrower than the rest: `mentions_list`, and Slack's private-search and file-read tools, are off at
-`ask-changes` and `read-only`. They are the reads that reach private content or another person's file, so the plugin's
-table says `effect: deny` for them. Writes are confirmed by an OpenCode ask, or by a host-signed action grant when an app
-calls over RPC; an allow rule alone is not a confirmation.
+A method's `effect` narrows this table: `ask` asks even where the level would allow, and `deny` turns the method off at
+every level, `all` included. Three reads carry `effect: deny` — `mentions_list`, Slack's private-search tool and Slack's
+file-read tool — because they reach private content or another person's file; a later allow rule for one agent or tool is
+the only way to run one. Writes are confirmed by an OpenCode ask, or by a host-signed action grant when an app calls over
+RPC; an allow rule alone is not a confirmation.
 
 ## What it reads and does
 
@@ -88,12 +90,12 @@ calls over RPC; an allow rule alone is not a confirmation.
 
 | Method | Class | Accounts | Operations |
 |---|---|---|---|
-| `status` | read | none | — |
-| `probe` | read | optional | `auth.test` |
-| `events_list` | read | optional | `auth.test`, `slack_read_user_profile`, `slack_read_channel`, `slack_read_thread` |
+| `status` | read | none | `auth.test` |
+| `probe` | read | optional | `auth.test`, `slack_read_user_profile` |
+| `events_list` | read | optional | `auth.test`, `slack_read_channel` |
 | `thread_read` | read | optional | `auth.test`, `slack_read_thread` |
 | `channels_list` | read | optional | `slack_list_user_channels` |
-| `mentions_list` | read | optional | `auth.test`, `slack_read_user_profile`, `assistant.search.context` |
+| `mentions_list` | read | optional | `auth.test`, `assistant.search.context` |
 | `mark_read` | write | optional | `conversations.mark` |
 | `mcp:slack_add_list_record` | write | optional | — |
 | `mcp:slack_add_reaction` | write | optional | — |
@@ -193,7 +195,8 @@ next step.
 - [docs/automations.md](docs/automations.md) — a timer recipe for each source.
 - [docs/architecture.md](docs/architecture.md) — the layers, the provider client and the OpenCode APIs used.
 - [docs/security.md](docs/security.md) — what leaves the machine, scopes, redaction and confirmation.
-- [skills/slack-search/SKILL.md](skills/slack-search/SKILL.md) — the workflow an agent follows.
+- [skills/slack/SKILL.md](skills/slack/SKILL.md) — the main skill: when to use the plugin, accounts, access and errors.
+- [skills/slack-search/SKILL.md](skills/slack-search/SKILL.md) — the search and read workflow.
 - [plugin-contract](https://github.com/we-the-rebel-alliance/plugin-contract) — the manifest, the doors and the modules this plugin is built on.
 
 ## License

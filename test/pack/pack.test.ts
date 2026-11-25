@@ -24,7 +24,7 @@ function run(command: string, args: readonly string[], cwd: string): string {
 test("the tarball holds the files whitelist, installs with no runtime dependencies, and starts", { timeout: 300_000 }, async () => {
   const work = mkdtempSync(join("/tmp", "slack-pack-"))
   try {
-    run("npm", ["run", "build"], REPO)
+    run("npm", ["run", "bundle"], REPO)
     const packed = JSON.parse(run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", work], REPO)) as { filename: string; files: { path: string }[] }[]
     const tarball = join(work, packed[0]!.filename)
 
@@ -38,6 +38,7 @@ test("the tarball holds the files whitelist, installs with no runtime dependenci
       "dist/index.js",
       "package.json",
       "skills/slack-search/SKILL.md",
+      "skills/slack/SKILL.md",
     ])
     assert.equal(paths.some((path) => path.endsWith(".d.ts") || path.includes("node_modules/")), false)
 

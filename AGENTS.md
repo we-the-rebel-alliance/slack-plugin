@@ -27,7 +27,7 @@ server with its own OAuth sign-in; one global Slack-app integration carries the 
 |---|---|
 | `npm ci --ignore-scripts` | installs dev tooling only; there are no runtime dependencies |
 | `npm run check` | typecheck, build, unit tests, `plugin-kit check`, and the pack test |
-| `npm run build` | bundles `src/index.ts` into `dist/index.js` with esbuild |
+| `npm run bundle` | bundles `src/index.ts` into the committed `dist/index.js` with esbuild |
 | `npm test` | the unit tests, on Node's test runner |
 | `npx plugin-kit check` | conformance, T0 and T1, the doc file set, forbidden patterns, no bundled kit |
 | `npx plugin-kit docs` | regenerates the generated doc sections from the manifest |
@@ -47,17 +47,21 @@ src/options.ts          oauth, events.channels, the profile scopes
 src/accounts.ts         slack-app client ID, one MCP server per alias
 src/provider/           endpoints, MCP tool calls, Web API calls
 src/handlers/           one file per method, plus Slack's message and channel parsing
+dist/                   the built entry, committed so a tag installs without a build
 test/support/fake.ts    two synthetic workspaces, work and personal
 test/unit/              handlers, provider mapping, the recorded fixture
 test/pack/              the packed tarball installs and starts
+skills/slack/           the main skill: accounts, access levels and errors
+skills/slack-search/    the search and read workflow
 ```
 
 ## Rules
 
 1. **The manifest is the source of truth.** Add or change a method, source or event in `package.json` `capabilities`
    first, then its handler, then its tests. Never register a tool by hand: `register` does it.
-2. **Every method that reads or writes Slack takes the account.** Never assume `default`; the register resolves the
-   alias through the contract's `accounts` module.
+2. **Every method that reads or writes Slack takes the account.** `status` takes none, and a pass-through tool uses its
+   alias's server rather than an `account` input. Never assume `default`; the register resolves the alias through the
+   contract's `accounts` module.
 3. **Classify every method truthfully.** A delete is `delete`, a send is `send`, a share is `share`. If in doubt, choose
    the stricter class.
 4. **Writes are confirmed.** `mark_read` runs only with an OpenCode ask or a host-signed grant over RPC; never add a
@@ -97,7 +101,7 @@ the section, then run `npx plugin-kit docs`. Hand-written text is plain English:
 
 ## Forbidden
 
-- Editing `dist/` by hand, or committing it.
+- Editing `dist/` by hand: `npm run bundle` writes it, and a stale bundle fails the check.
 - Adding runtime dependencies, peer dependencies or lifecycle scripts.
 - Naming any app in code, manifest or docs, except in an `x-<app>` key.
 - Copying contract code into this repository.

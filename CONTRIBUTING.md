@@ -16,6 +16,9 @@ npm ci --ignore-scripts
 npm run check
 ```
 
+`dist/index.js` is committed, because a tag install has no build step; `npm run bundle` writes it, and `npm run check`
+fails when it is stale (the CI job runs `npm run bundle && git diff --exit-code dist/` too).
+
 `npm run check` runs the typecheck, the build, the unit tests, the pack test, and `plugin-kit check` (conformance
 with T0 and T1, the doc file set, forbidden patterns and the bundled-kit check).
 

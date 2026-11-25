@@ -47,8 +47,8 @@ if ((page.failed ?? []).length === 0) state.cursor = page.cursor
 return { state }
 ```
 
-The suggested cadence is every 5 minutes: the search reads the user's own mentions, and `mentions_list` is off at
-`ask-changes` and `read-only` by design.
+The suggested cadence is every 5 minutes: the search reads the user's own mentions, and `mentions_list` is `effect: deny`,
+so it is denied at every level until a later allow rule names it for the automation's agent.
 
 ## After a write
 

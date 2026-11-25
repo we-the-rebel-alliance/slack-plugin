@@ -30,15 +30,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts --bundle --format=esm --platform=node --target=es2022 --external:@opencode/plugin --outfile=dist/index.js --log-level=warning",
+    "bundle": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts --bundle --format=esm --platform=node --target=es2022 --external:@opencode/plugin --outfile=dist/index.js --log-level=warning",
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --test test/unit/*.test.ts",
     "test:pack": "node --test test/pack/*.test.ts",
+    "actionlint": "node scripts/check-actionlint.mjs",
     "conformance": "plugin-kit check",
     "docs": "plugin-kit docs",
-    "check": "npm run typecheck && npm run build && npm test && npm run test:pack && npm run actionlint && plugin-kit check && npm run docs:check",
-    "actionlint": "node scripts/check-actionlint.mjs",
-    "docs:check": "plugin-kit docs --check"
+    "docs:check": "plugin-kit docs --check",
+    "check": "npm run typecheck && npm run bundle && npm test && npm run test:pack && npm run actionlint && plugin-kit check && npm run docs:check"
   },
   "capabilities": {
     "version": 1,
@@ -168,13 +168,17 @@
     "methods": {
       "status": {
         "class": "read",
-        "accounts": "none"
+        "accounts": "none",
+        "operations": [
+          "auth.test"
+        ]
       },
       "probe": {
         "class": "read",
         "accounts": "optional",
         "operations": [
-          "auth.test"
+          "auth.test",
+          "slack_read_user_profile"
         ]
       },
       "events_list": {
@@ -182,9 +186,7 @@
         "accounts": "optional",
         "operations": [
           "auth.test",
-          "slack_read_user_profile",
-          "slack_read_channel",
-          "slack_read_thread"
+          "slack_read_channel"
         ]
       },
       "thread_read": {
@@ -208,7 +210,6 @@
         "effect": "deny",
         "operations": [
           "auth.test",
-          "slack_read_user_profile",
           "assistant.search.context"
         ]
       },
@@ -345,9 +346,7 @@
         },
         "operations": [
           "auth.test",
-          "slack_read_user_profile",
-          "slack_read_channel",
-          "slack_read_thread"
+          "slack_read_channel"
         ],
         "scope": {
           "keys": [
@@ -399,7 +398,6 @@
         },
         "operations": [
           "auth.test",
-          "slack_read_user_profile",
           "assistant.search.context"
         ],
         "cadence": {

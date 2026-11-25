@@ -27,7 +27,7 @@ the one above.
 
 ## Picking an account
 
-Every method that reads or writes Slack takes `account`. With one alias it may be left out. With more than one, leaving
+Every method that reads or writes Slack takes `account`; `status` takes none, and Slack's pass-through tools use their alias's server rather than an `account` input. With one alias it may be left out. With more than one, leaving
 it out is `ACCOUNT_REQUIRED` and its next step lists the aliases; an alias the plugin does not have is `ACCOUNT_UNKNOWN`.
 
 ```json
