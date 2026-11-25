@@ -8,6 +8,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { test } from "node:test"
 import type { Plugin } from "@opencode/plugin"
 import { OpenCode } from "@opencode/sdk"
@@ -59,17 +60,27 @@ test("the plugin registers every shipped skill on the real 2.4.1 host", { timeou
   try {
     const session = await host.sessions.create({ location: { directory: project }, agent: "build", permissions: [] })
     await host.sessions.prompt({ sessionID: session.id, text: "activate the skill test", delivery: "queue" }).catch(() => undefined)
-    let listed: { readonly id: string; readonly description?: string }[] = []
+    let listed: { readonly id: string; readonly name?: string; readonly path?: string; readonly content?: string; readonly description?: string }[] = []
     for (const deadline = Date.now() + 60_000; Date.now() < deadline; ) {
-      listed = (await host.skill.list({ location: { directory: project } })).data.map((skill: { readonly id: string; readonly description?: string }) => ({
+      listed = (await host.skill.list({ location: { directory: project } })).data.map((skill: { readonly id: string; readonly name?: string; readonly path?: string; readonly content?: string; readonly description?: string }) => ({
         id: skill.id,
+        ...(typeof skill.name === "string" ? { name: skill.name } : {}),
+        ...(typeof skill.path === "string" ? { path: skill.path } : {}),
+        ...(typeof skill.content === "string" ? { content: skill.content } : {}),
         ...(typeof skill.description === "string" ? { description: skill.description } : {}),
       }))
       if (SKILLS.every((id) => listed.some((skill) => skill.id === id))) break
       await sleep(250)
     }
     assert.deepEqual(SKILLS.filter((id) => !listed.some((skill) => skill.id === id)), [], `skills missing from the host: ${listed.map((skill) => skill.id).join(", ")}`)
-    for (const id of SKILLS) assert.equal(listed.find((skill) => skill.id === id)?.description, expectedDescription(id), `${id}: the registered description differs from its SKILL.md`)
+    for (const id of SKILLS) {
+      const skill = listed.find((entry) => entry.id === id)
+      assert.ok(skill !== undefined, `the host did not register the ${id} skill`)
+      assert.equal(skill.name, id, `${id}: the registered name differs from its directory`)
+      assert.equal(skill.path, fileURLToPath(new URL(`../../skills/${id}/SKILL.md`, import.meta.url)), `${id}: the registered path differs`)
+      assert.ok((skill.content ?? "").trim().length > 0, `${id}: the registered skill has no body`)
+      assert.equal(skill.description, expectedDescription(id), `${id}: the registered description differs from its SKILL.md`)
+    }
 
     const location = { directory: project }
     const commands = (await host.command.list({ location })).data.map((command: { readonly name: string }) => command.name)

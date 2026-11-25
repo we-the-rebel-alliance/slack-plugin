@@ -23,7 +23,7 @@ export default Plugin.define({
   async setup(ctx) {
     assertHost(ctx, manifest)
     const options = readOptions(ctx.options)
-    await registerSkills(ctx.skill)
+    const skills = await registerSkills(ctx)
     await registerAppIntegration(ctx.integration)
     const client = await resolveClient(ctx.integration, options)
     const accounts = await registerSlackAccounts(ctx, manifest, options, client)
@@ -65,6 +65,7 @@ export default Plugin.define({
     })
     return async () => {
       await command.dispose().catch(() => undefined)
+      await skills.dispose().catch(() => undefined)
       await registration.dispose()
     }
   },
