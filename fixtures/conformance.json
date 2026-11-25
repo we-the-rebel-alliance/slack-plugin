@@ -2,7 +2,7 @@
   "$comment": "Recorded from the plugin's own handlers over two synthetic Slack workspaces, work and personal: every person, channel and message is invented. The Web API and the MCP tools are answered by test/support/fake.ts, so nothing here touched Slack.",
   "plugin": "@we-the-rebel-alliance/slack-plugin",
   "accounts": {
-    "real": true,
+    "real": false,
     "aliases": [
       "work",
       "personal"

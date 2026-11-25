@@ -67,7 +67,7 @@ export async function recordFixture(): Promise<Record<string, unknown>> {
       "Recorded from the plugin's own handlers over two synthetic Slack workspaces, work and personal: every person, channel and message is invented. The Web API and the MCP tools are answered by test/support/fake.ts, so nothing here touched Slack.",
     plugin: packageName,
     accounts: {
-      real: true,
+      real: false,
       aliases: ["work", "personal"],
       required: { method: "events_list", code: "ACCOUNT_REQUIRED" },
       unknown: { method: "events_list", account: "nobodyhere", code: "ACCOUNT_UNKNOWN" },
