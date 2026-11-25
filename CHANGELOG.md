@@ -17,3 +17,12 @@ The first release on plugin-contract v0.
   and each method's class and effect.
 - Documentation and the `slack-search` skill, and a conformance fixture recorded over the two synthetic workspaces
   `work` and `personal`, with T0 and T1.
+
+### Removed since v0.0.7
+
+- The TUI status dialog (the `slack.workspace.tui` plugin): the contract's `status` method and the `/slack` command show
+  the same state, so the dialog duplicated a second UI surface. OpenCode 2.4 clients render status from the method; the
+  old dialog's refresh key has no replacement, because the method is read on demand.
+- The tools RPC's `describe`: contract §18 makes `describe` diagnostics only, and the manifest and catalog are the
+  discovery path. The tools RPC itself is replaced by the contract RPC id `slack` (see the parity table in the pull
+  request).

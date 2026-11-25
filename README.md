@@ -173,8 +173,8 @@ Every failure reads `CODE: What happened. Next step: What to do.` The contract's
 
 ## Troubleshooting
 
-Start with `tools.slack.status`: every alias has a state (`ready`, `needs_sign_in`, `error`) and the plugin answers one
-next step.
+Start with `tools.slack.status` or `/slack`: every alias has a state (`ready`, `needs_sign_in`, `error`) and the plugin
+answers one next step.
 
 - **`NEEDS_SIGN_IN`** — run `/connect`, choose that alias's server (`slack` or `slack-work`), and sign in. If the row is
   missing, no server was registered: set the Slack app's client ID and restart OpenCode.

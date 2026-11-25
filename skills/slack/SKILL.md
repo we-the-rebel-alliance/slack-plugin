@@ -11,7 +11,7 @@ workflow for finding and reading Slack content.
 
 ## Pick the account alias
 
-Each alias is one Slack workspace with its own sign-in. Call `tools.slack.status` to see the aliases and their state, or
+Each alias is one Slack workspace with its own sign-in. Call `tools.slack.status` (or the `/slack` command) to see the aliases and their state, or
 `tools.slack.probe` for one alias's owner. A method that reads or writes Slack takes `account`; with one alias it may be
 left out, and with several a call without it answers `ACCOUNT_REQUIRED` and lists them. `tools.slack.status` takes no
 account, and Slack's pass-through tools use their alias's server (`slack-work_…`) rather than an `account` input. Never
