@@ -30,7 +30,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "bundle": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts --bundle --format=esm --platform=node --target=es2022 --external:@opencode/plugin --outfile=dist/index.js --log-level=warning",
+    "bundle": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --test test/unit/*.test.ts",
     "test:pack": "node --test test/pack/*.test.ts",
@@ -425,6 +425,7 @@
     "@types/node": "24.19.2",
     "@we-the-rebel-alliance/plugin-contract": "github:we-the-rebel-alliance/plugin-contract#v0.0.0",
     "esbuild": "0.28.2",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "yaml": "2.9.1"
   }
 }
