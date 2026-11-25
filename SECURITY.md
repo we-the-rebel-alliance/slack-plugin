@@ -4,7 +4,7 @@
 
 Report it privately through this repository's **Security** tab → **Report a vulnerability**, or by email to the
 maintainers listed in `CODEOWNERS` if the advisory form is not available. Do not open a public issue for a
-vulnerability. We answer within five working days, and we credit a reporter who asks to be named.
+vulnerability. The maintainers aim to answer within five working days, and credit a reporter who asks to be named.
 
 Please include what you did, what happened, what you expected, the version you ran and the OpenCode release. Never paste
 a real Slack token, a client secret or another person's content; redact it first.

@@ -45,7 +45,7 @@ src/index.ts            one register call: assertHost, options, accounts, handle
 src/manifest.ts         the installed package's capabilities and version
 src/options.ts          oauth, events.channels, the profile scopes
 src/accounts.ts         slack-app client ID, one MCP server per alias
-src/provider/           endpoints, MCP tool calls, Web API calls, Slack answer parsing
+src/provider/           endpoints, MCP tool calls, Web API calls
 src/handlers/           one file per method, plus Slack's message and channel parsing
 test/support/fake.ts    two synthetic workspaces, work and personal
 test/unit/              handlers, provider mapping, the recorded fixture

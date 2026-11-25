@@ -7,8 +7,8 @@
 | Entry | `src/index.ts` | One `register` call: gate the host, read the options, register the accounts, hand over the handler table. |
 | Manifest | `package.json` `capabilities` | Every method, source and event. `src/manifest.ts` reads it from the installed package. |
 | Accounts | `src/accounts.ts` | The global Slack-app sign-in, one MCP server per alias, the alias's scopes and redirect. |
-| Provider | `src/provider/` | The two endpoints, the MCP tool call, the Web API call and Slack's answer parsing. |
-| Handlers | `src/handlers/` | One file per method; pure where it can be, every provider call behind `SlackProvider`. |
+| Provider | `src/provider/` | The two endpoints, the MCP tool call and the Web API call. |
+| Handlers | `src/handlers/` | One file per method, every provider call behind `SlackProvider`, and Slack's two answer shapes parsed into contract events. |
 | Skills | `skills/slack-search/` | The workflow an agent follows. |
 
 `src/index.ts` never adds a tool, an RPC method or a permission rule. `register` reads the manifest and the handler table,
