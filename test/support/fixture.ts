@@ -5,6 +5,8 @@
  * recording cannot drift from the code. Set `SLACK_RECORD=1` while running that test to write it again. The data is
  * synthetic, so the kit's real-account redaction pass does not apply.
  */
+import { eventHash } from "@we-the-rebel-alliance/plugin-contract/events"
+import { redactValue } from "@we-the-rebel-alliance/plugin-contract/kit"
 import type { MethodCall } from "@we-the-rebel-alliance/plugin-contract/register"
 import { packageName, manifest } from "../../src/manifest.ts"
 import { callFor, handlersWith } from "./context.ts"
@@ -32,6 +34,22 @@ async function refusalOf(work: () => Promise<unknown>): Promise<string> {
  * Every recording the kit reads: the two accounts, both sources with their pages, probes, the detail, the suggest
  * read, status, and the RPC confirmation of the plugin's one write.
  */
+/** Redact the personal values a fixture carries, then re-hash the events whose actors changed. */
+function redacted(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redacted)
+  if (value === null || typeof value !== "object") return value
+  const out: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(value)) out[key] = redacted(entry)
+  const events = (value as { readonly events?: unknown }).events
+  if (Array.isArray(events) && events.length > 0) {
+    out["events"] = events.map((event) => {
+      const { hash: _hash, ...rest } = event as Record<string, unknown>
+      return { ...rest, hash: eventHash(rest as never) }
+    })
+  }
+  return out
+}
+
 export async function recordFixture(): Promise<Record<string, unknown>> {
   const provider = createFakeProvider({ asOf: AS_OF })
   const table = handlersWith(provider)
@@ -44,7 +62,7 @@ export async function recordFixture(): Promise<Record<string, unknown>> {
   const workMentions = await run("mentions_list", { source: "mentions", since: SINCE })
   const personalMentions = await run("mentions_list", { source: "mentions", since: SINCE }, "personal")
 
-  return {
+  const fixture = {
     $comment:
       "Recorded from the plugin's own handlers over two synthetic Slack workspaces, work and personal: every person, channel and message is invented. The Web API and the MCP tools are answered by test/support/fake.ts, so nothing here touched Slack.",
     plugin: packageName,
@@ -107,6 +125,7 @@ export async function recordFixture(): Promise<Record<string, unknown>> {
     },
     namespace: manifest.plugin.summary,
   }
+  return redacted(redactValue(fixture)) as Record<string, unknown>
 }
 
 /** What the two synthetic workspaces hold, for a test that wants to name one. */

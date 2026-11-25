@@ -30,7 +30,7 @@
     "slack.workspace": {
       "cases": [
         {
-          "name": "both confirmed channels of the work account",
+          "name": "<redacted:personal>",
           "input": {
             "source": "workspace",
             "since": "2026-11-17T00:00:00Z",
@@ -61,7 +61,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0AAANA001",
-                    "name": "Ana Silva"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "The queue migration is on for Thursday. The runbook is in the shared space.",
@@ -72,7 +72,7 @@
                   "channel:C0AAWORK01",
                   "thread-parent"
                 ],
-                "hash": "sha256:186e82ed15df23f55205eb36ea7d101a24eb887a4571991bf516e7ce92b37f4c"
+                "hash": "sha256:e0761c12ec37508df566fa03bad190fe33eb67bf2deb81595eddb3ebc4ab95b2"
               },
               {
                 "source": "workspace",
@@ -85,7 +85,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0AAKAI001",
-                    "name": "Kai Mensah"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "Rehearsal passed. I will watch the lag after the switch.",
@@ -96,7 +96,7 @@
                   "channel:C0AAWORK01",
                   "thread-reply"
                 ],
-                "hash": "sha256:383e81074b1c43c93cabcb88e7c0ec5026d04a84f3e2aa227f671f6f378af960"
+                "hash": "sha256:2a7c22e5df3bb84d84baebe76854c59441cdc885e7163f294ee06f917c6946b2"
               },
               {
                 "source": "workspace",
@@ -109,7 +109,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0AAKAI001",
-                    "name": "Kai Mensah"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "No open incidents. Ping me if the queue backs up.",
@@ -119,7 +119,7 @@
                   "dm",
                   "channel:D0AAKAI001"
                 ],
-                "hash": "sha256:3ff353762e69c792482d47e42bb397e95ee98ea18ed7b850a3b12ccb6349f10c"
+                "hash": "sha256:fee973f847b664bec331502daf05c770b9c79d8c4b1de04a645fb87109ccfc4e"
               },
               {
                 "source": "workspace",
@@ -132,7 +132,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0AAKAI001",
-                    "name": "Kai Mensah"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "The lag stayed under a second after the switch.",
@@ -142,7 +142,7 @@
                   "channel",
                   "channel:C0AAWORK01"
                 ],
-                "hash": "sha256:ef4e759c1071efe7a552f254a840265e21a7a1205532899e2661bfa4b146fde2"
+                "hash": "sha256:ad5540c5ed5871fc7379c28116ec0d405d7a9094abcc9d5739bde9623e8c6cc4"
               }
             ],
             "cursor": "eyJ2IjoyLCJzIjoid29ya3NwYWNlIiwiYiI6IjI1YTI1OWEwNTk4MDU2OTMiLCJjIjp7IkMwQUFXT1JLMDEiOiIxNzk1MDc1MjAwLjAwMDMwMCIsIkQwQUFLQUkwMDEiOiIxNzk1MDY1MDAwLjAwMDQwMCJ9fQ",
@@ -159,7 +159,7 @@
           }
         },
         {
-          "name": "the page after the work cursor",
+          "name": "<redacted:personal>",
           "input": {
             "source": "workspace",
             "since": "2026-11-17T00:00:00Z",
@@ -194,7 +194,7 @@
           }
         },
         {
-          "name": "the personal account reads its own direct message",
+          "name": "<redacted:personal>",
           "input": {
             "source": "workspace",
             "since": "2026-11-17T00:00:00Z",
@@ -224,7 +224,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0BBROWAN1",
-                    "name": "Rowan Vale"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "Are we still walking on Saturday?",
@@ -234,7 +234,7 @@
                   "dm",
                   "channel:D0BBROWAN1"
                 ],
-                "hash": "sha256:cb87d1a20397f34dc575a90e8708f08eeaf6715d034d56c1648ee94a08f8c9b0"
+                "hash": "sha256:7519028230b0dad9623f7e8e43eaa09f5dfa0157da7dc1127938f8b3d234e372"
               }
             ],
             "cursor": "eyJ2IjoyLCJzIjoid29ya3NwYWNlIiwiYiI6Ijk0NmY0M2RjNjU0MjQ2NmUiLCJjIjp7IkQwQkJST1dBTjEiOiIxNzk0OTQyMzAwLjAwMDEwMCJ9fQ",
@@ -250,7 +250,7 @@
           }
         },
         {
-          "name": "a channel the work account cannot read",
+          "name": "<redacted:personal>",
           "input": {
             "source": "workspace",
             "since": "2026-11-17T00:00:00Z",
@@ -332,7 +332,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0AAANA001",
-                    "name": "Ana Silva"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "The queue migration is on for Thursday. The runbook is in the shared space.",
@@ -343,7 +343,7 @@
                   "channel:C0AAWORK01",
                   "thread-parent"
                 ],
-                "hash": "sha256:186e82ed15df23f55205eb36ea7d101a24eb887a4571991bf516e7ce92b37f4c"
+                "hash": "sha256:e0761c12ec37508df566fa03bad190fe33eb67bf2deb81595eddb3ebc4ab95b2"
               },
               {
                 "source": "workspace",
@@ -356,7 +356,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0AAKAI001",
-                    "name": "Kai Mensah"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "Rehearsal passed. I will watch the lag after the switch.",
@@ -367,7 +367,7 @@
                   "channel:C0AAWORK01",
                   "thread-reply"
                 ],
-                "hash": "sha256:383e81074b1c43c93cabcb88e7c0ec5026d04a84f3e2aa227f671f6f378af960"
+                "hash": "sha256:2a7c22e5df3bb84d84baebe76854c59441cdc885e7163f294ee06f917c6946b2"
               }
             ],
             "cursor": "eyJ2IjoyLCJzIjoid29ya3NwYWNlLnRocmVhZCIsImIiOiJkMjJlYTI4OWY0ZGU5NzdhIiwidCI6IjE3OTQ5OTY5MDAuMDAwMTAwIn0",
@@ -420,7 +420,7 @@
     "slack.mentions": {
       "cases": [
         {
-          "name": "the work account's mentions",
+          "name": "<redacted:personal>",
           "input": {
             "source": "mentions",
             "since": "2026-11-17T00:00:00Z"
@@ -445,7 +445,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0AAKAI001",
-                    "name": "Kai Mensah"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "Ana, the migration notes need your sign-off before Thursday.",
@@ -456,7 +456,7 @@
                   "channel",
                   "channel:C0AAWORK01"
                 ],
-                "hash": "sha256:21b4c18efa6129f58f20aa443e4ff301a8ddd5e3edc3a38be78b06b5d0230b83"
+                "hash": "sha256:8ed068ecbf156425daed634b32d2ff9bf4f253a1b4b30dbd4164e81f85c92a97"
               }
             ],
             "cursor": "eyJ2IjoyLCJzIjoibWVudGlvbnMiLCJiIjoiYzdhMWUxYzc2ZDhlMDRlOSIsInQiOiIxNzk1MDgxMjAwLjAwMDUwMCIsImlkIjoiQzBBQVdPUkswMToxNzk1MDgxMjAwLjAwMDUwMCJ9",
@@ -467,7 +467,7 @@
           }
         },
         {
-          "name": "the personal account's mentions",
+          "name": "<redacted:personal>",
           "input": {
             "source": "mentions",
             "since": "2026-11-17T00:00:00Z"
@@ -492,7 +492,7 @@
                   {
                     "role": "from",
                     "id": "slack:U0BBROWAN1",
-                    "name": "Rowan Vale"
+                    "name": "<redacted:personal>"
                   }
                 ],
                 "title": "Ana, are we still walking on Saturday?",
@@ -503,7 +503,7 @@
                   "dm",
                   "channel:D0BBROWAN1"
                 ],
-                "hash": "sha256:135bb274c57b532a5374ae29949a3bff81fc4f6902431f86d1d98190e1dedd16"
+                "hash": "sha256:36b3a82223ceb9ea9481452c55e57ccfd2b328d736ab5a6d0800ebc64976a2a7"
               }
             ],
             "cursor": "eyJ2IjoyLCJzIjoibWVudGlvbnMiLCJiIjoiZmVjOWVmOTU3ODcyYTZjYiIsInQiOiIxNzk0OTQyMzAwLjAwMDEwMCIsImlkIjoiRDBCQlJPV0FOMToxNzk0OTQyMzAwLjAwMDEwMCJ9",
