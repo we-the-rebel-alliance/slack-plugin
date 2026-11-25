@@ -5,7 +5,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { accountName } from "@we-the-rebel-alliance/plugin-contract/accounts"
-import { APP_INTEGRATION_ID, registerSlackAccounts, resolveClient, scopesOf, serverConfig, serverName } from "../../src/accounts.ts"
+import { APP_INTEGRATION_ID, registerAppIntegration, registerSlackAccounts, resolveClient, scopesOf, serverConfig, serverName } from "../../src/accounts.ts"
 import { DEFAULT_SCOPES } from "../../src/defaults.ts"
 import { manifest } from "../../src/manifest.ts"
 import { readOptions } from "../../src/options.ts"
@@ -27,6 +27,28 @@ test("a server carries the app's client ID, the alias's scopes and the plugin's 
   assert.equal(server.oauth["scope"], "channels:read users:read")
   assert.deepEqual(scopesOf({ scopes: ["channels:read"] }, DEFAULT_SCOPES), ["channels:read"])
   assert.deepEqual(scopesOf(undefined, DEFAULT_SCOPES), DEFAULT_SCOPES)
+})
+
+test("the Slack app integration is registered with a client-ID key method", async () => {
+  const seen: { updated?: string; method?: Record<string, unknown> } = {}
+  const integration = {
+    transform: async (callback: (editor: unknown) => void) => {
+      callback({
+        update: (id: string) => {
+          seen.updated = id
+        },
+        method: {
+          update: (registration: Record<string, unknown>) => {
+            seen.method = registration
+          },
+        },
+      })
+    },
+  }
+  await registerAppIntegration(integration as never)
+  assert.equal(seen.updated, APP_INTEGRATION_ID)
+  assert.equal(seen.method?.["integrationID"], APP_INTEGRATION_ID)
+  assert.equal((seen.method?.["method"] as { type: string }).type, "key")
 })
 
 test("resolveClient reads options first, then the /connect entry", async () => {
