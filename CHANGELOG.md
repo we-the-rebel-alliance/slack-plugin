@@ -4,16 +4,16 @@
 
 The first release on plugin-contract v0.
 
-- One plugin name everywhere: id, tool namespace and RPC id `slack`, capability ids `slack.workspace` and
-  `slack.mentions`, permission actions `slack.<method>`.
-- Accounts through the contract's `accounts` module: one Slack workspace per alias, one MCP server per alias, one global
-  Slack-app client-ID integration. `account` on every method that reads or writes Slack.
-- The plugin's own reads: `status`, `probe`, `events_list`, `thread_read`, `channels_list`, `mentions_list`. Its one
-  write: `mark_read`, which emits `changed` for `slack.workspace` after the write.
-- Slack's 27 MCP tools declared as pass-through `mcp:<tool>` methods, classed by what each one does.
-- One `register` call wires the agent tool, Code Mode and the RPC; the access rules are generated from `access` and the
-  manifest. `mentions_list`, the private search and the file read are denied at `ask-changes` and `read-only`.
-- Removed: the copied release kit, the tools RPC and its cursor code, the previous host's declarations and views, the
-  TUI, the `/slack-status` command, the old `sources` and `opencode` keys, and the source-contract dependency.
-- Docs and the `slack-search` skill written for v0; conformance recorded for two synthetic workspaces, `work` and
-  `personal`, with T0 and T1.
+- Slack's 27 MCP tools, passed through as `mcp:<tool>` methods and classed read, write, send or share, with one access
+  rule per account alias.
+- The plugin's own reads: `status`, `probe`, `events_list`, `thread_read`, `channels_list` and `mentions_list`; and one
+  write, `mark_read`, which emits `changed` for the workspace source after the write.
+- Accounts through the contract's `accounts` module: one Slack workspace per alias, one MCP server per alias with its
+  own OAuth, and one global Slack-app client-ID integration at `slack-app`. `account` on every method that reads or
+  writes Slack.
+- Two events sources: `slack.workspace`, with a channel scope and a thread detail, and `slack.mentions`. Cursors are
+  bound to the plugin, source, account and scope.
+- One `register` call wires the agent tool, Code Mode, the RPC and the bus; the access rules are generated from `access`
+  and each method's class and effect.
+- Documentation and the `slack-search` skill, and a conformance fixture recorded over the two synthetic workspaces
+  `work` and `personal`, with T0 and T1.
