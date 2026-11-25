@@ -37,7 +37,7 @@
     "conformance": "plugin-kit check",
     "docs": "plugin-kit docs",
     "check": "npm run typecheck && npm run build && npm test && npm run test:pack && npm run actionlint && plugin-kit check && npm run docs:check",
-    "actionlint": "actionlint -color",
+    "actionlint": "node scripts/check-actionlint.mjs",
     "docs:check": "plugin-kit docs --check"
   },
   "capabilities": {
