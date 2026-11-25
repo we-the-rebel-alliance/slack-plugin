@@ -1,8 +1,11 @@
 name: Release
 
 # A tag v<package.json version> on a master commit whose CI passed creates the GitHub Release. Releases are not
-# published to npm: a consumer pins the tag, github:we-the-rebel-alliance/slack-plugin#v<version>, and dist/ is built
-# by this workflow. Only the owner decides a release; an agent never pushes a tag on its own.
+# published to npm: a consumer pins the tag, github:we-the-rebel-alliance/slack-plugin#v<version>, and the committed
+# dist/ is what that install runs. Only the owner decides a release; an agent never pushes a tag on its own.
+#
+# Least privilege: `build` runs repository code with `contents: read`; only `publish`, which runs no repository code
+# and takes the artifact `build` produced, holds `contents: write`.
 
 on:
   push:
@@ -17,12 +20,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: release
+  build:
+    name: build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,7 +49,6 @@ jobs:
           tar xzf "actionlint_${version}_linux_amd64.tar.gz" actionlint
           echo "$PWD" >> "$GITHUB_PATH"
       - run: npm ci --ignore-scripts
-      - run: npm run check
       - name: The tag names this package's version
         env:
           TAG: ${{ github.ref_name }}
@@ -54,6 +56,9 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           test "v${version}" = "$TAG"
+      - name: The committed bundle is current
+        run: npm run bundle && git diff --exit-code dist/
+      - run: npm run check
       - name: Pack the release files
         run: |
           set -euo pipefail
@@ -61,6 +66,24 @@ jobs:
           npx plugin-kit check --json > release/conformance.json
           npm pack --pack-destination release
           sha256sum release/*.tgz release/conformance.json > release/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release
+          path: release/
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release
+          path: release
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

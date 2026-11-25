@@ -44,4 +44,6 @@ jobs:
           echo "$PWD" >> "$GITHUB_PATH"
       # OpenCode installs plugins with scripts off, and the plugin has no lifecycle script to run.
       - run: npm ci --ignore-scripts
+      # The built entry is committed so a tag install needs no build; a stale bundle never reaches a tag.
+      - run: npm run bundle && git diff --exit-code dist/
       - run: npm run check
