@@ -7,6 +7,9 @@ workspaces at once, one per account alias, and every method takes the alias it s
 Slack's own MCP tools are passed through as they are: their server holds the sign-in and the plugin never proxies one.
 The plugin's own reads and its one write use the same account's sign-in.
 
+The plugin follows [plugin-contract](https://github.com/we-the-rebel-alliance/plugin-contract) v0: one manifest, one
+`register` call, every method reachable as a tool, in Code Mode and over RPC.
+
 ## Install
 
 ```sh
@@ -47,6 +50,21 @@ Each alias is one Slack workspace with its own sign-in, its own cursors and its 
 
 With one alias it may be left out of a call; with more than one, a call without `account` is `ACCOUNT_REQUIRED` and its
 next step lists the aliases. See [docs/accounts.md](docs/accounts.md).
+
+## Options
+
+Set them in the plugin's entry in `opencode.json`; [docs/configuration.md](docs/configuration.md) has the fields and
+examples.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `access` | `all` | How much the plugin's methods may do: `all`, `ask-changes` or `read-only`. |
+| `accounts` | one `default` | A map of alias to profile; a profile may set that alias's Slack user scopes. |
+| `oauth.client_id` | — | The Slack app's client ID; otherwise paste it in `/connect` under **Slack app client ID**. |
+| `oauth.redirect_uri` | `http://localhost:8765/callback` | A redirect URL registered on the Slack app. |
+| `oauth.scopes` | the plugin's default list | The user scopes every alias's sign-in asks for. |
+| `events.channels` | `[]` | Channel and direct-message ids a read uses when its call names no scope. |
+| `allowUntestedHost` | `false` | Start outside `>=2.4.1 <2.5.0`. |
 
 ## Access
 
@@ -151,6 +169,22 @@ Every failure reads `CODE: What happened. Next step: What to do.` The contract's
 | `UNAVAILABLE` | the provider could not be reached |
 <!-- /generated:errors -->
 
+## Troubleshooting
+
+Start with `tools.slack.status`: every alias has a state (`ready`, `needs_sign_in`, `error`) and the plugin answers one
+next step.
+
+- **`NEEDS_SIGN_IN`** — run `/connect`, choose that alias's server (`slack` or `slack-work`), and sign in. If the row is
+  missing, no server was registered: set the Slack app's client ID and restart OpenCode.
+- **`SCOPE_MISSING`** — Slack named a scope the sign-in lacks. Add it to the Slack app and to `oauth.scopes`, then sign
+  in again. A private channel's history needs `groups:history`; `mark_read` needs the conversation type's `:write` scope.
+- **`ACCOUNT_REQUIRED` / `ACCOUNT_UNKNOWN`** — pass one of the aliases the failure lists.
+- **`CURSOR_INVALID`** — the cursor belongs to another account, source or scope. Read again without it.
+- **`PERMISSION_DENIED`** — the agent's rules or the person's grant do not cover the call. Ask for it; do not widen it
+  yourself.
+- **`HOST_UNTESTED`** — the plugin refuses an OpenCode release outside `>=2.4.1 <2.5.0`. Update OpenCode, or set
+  `allowUntestedHost`.
+
 ## Docs
 
 - [docs/capabilities.md](docs/capabilities.md) — each source, method and event.
@@ -160,6 +194,7 @@ Every failure reads `CODE: What happened. Next step: What to do.` The contract's
 - [docs/architecture.md](docs/architecture.md) — the layers, the provider client and the OpenCode APIs used.
 - [docs/security.md](docs/security.md) — what leaves the machine, scopes, redaction and confirmation.
 - [skills/slack-search/SKILL.md](skills/slack-search/SKILL.md) — the workflow an agent follows.
+- [plugin-contract](https://github.com/we-the-rebel-alliance/plugin-contract) — the manifest, the doors and the modules this plugin is built on.
 
 ## License
 
