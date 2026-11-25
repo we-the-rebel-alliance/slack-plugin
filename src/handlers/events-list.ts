@@ -138,6 +138,10 @@ export function eventsListHandler(context: HandlerContext): MethodHandler {
       const listed: { channel: string; order: number; at: bigint; event: SourceEvent }[] = []
       const bounds = new Map<string, bigint>()
       let more = false
+      // The cursor keeps one bound per channel: the ts of the last event this page consumed from that channel. Slack's
+      // ts is the message id and is unique within a channel, so `at > bound` is a total order there and never skips an
+      // unconsumed message. A tie across channels is safe too: a channel's bound advances only for an event consumed
+      // from that channel, so a page cut between two messages of one ts leaves the second channel's bound below it.
       for (const [order, channel] of channels.entries()) {
         const after = known.get(channel) ?? start
         const page = await channelMessages(read, channel, after, now)
@@ -158,6 +162,7 @@ export function eventsListHandler(context: HandlerContext): MethodHandler {
         if (drop === undefined && events.length === fits) break
         if (drop === undefined) events.push(item.event)
         else refused.push(drop)
+        // Advance only this channel's bound: another channel's same-ts event was not consumed and must be re-read.
         bounds.set(item.channel, item.at)
         consumed++
       }

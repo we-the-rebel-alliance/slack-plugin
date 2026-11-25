@@ -58,6 +58,36 @@ test("events_list advances its cursor and refuses a cursor from another account"
   await assert.rejects(() => table["events_list"]!.run({ source: "workspace", since: SINCE, scope: WORK_SCOPE, cursor: first.cursor }, callFor("personal")), /CURSOR_INVALID:/)
 })
 
+test("events_list never skips a same-timestamp event across a page boundary", async () => {
+  // Slack's ts is the message id and is unique within a channel, and an event's external id is `<channel>:<ts>`, so two
+  // messages at one ts in one channel would share an external id and the contract forbids it. A same-ts tie can only be
+  // between channels, and this page cut falls between them: the first page consumes the first channel's event only.
+  const tie = "1795000000.000100"
+  const provider = withProvider({
+    readChannel: async (_alias, input) => {
+      if (input.channel_id === "C0AAWORK01") return { messages: [{ ts: tie, user: "U0AAKAI001", name: "Kai Mensah", text: "first in the tie" }] }
+      if (input.channel_id === "D0AAKAI001") return { messages: [{ ts: tie, user: "U0AAKAI001", name: "Kai Mensah", text: "second in the tie" }] }
+      return { messages: [] }
+    },
+  })
+  const table = handlersWith(provider)
+  const read = (input: Readonly<Record<string, unknown>>) =>
+    table["events_list"]!.run({ source: "workspace", since: SINCE, scope: WORK_SCOPE, limit: 1, ...input }, callFor("work")) as Promise<{
+      events: { external_id: string; occurred_at: string }[]
+      cursor: string
+      more: boolean
+    }>
+  const first = await read({})
+  assert.deepEqual(first.events.map((event) => event.external_id), ["C0AAWORK01:1795000000.000100"])
+  assert.equal(first.more, true)
+  const second = await read({ cursor: first.cursor })
+  assert.deepEqual(second.events.map((event) => event.external_id), ["D0AAKAI001:1795000000.000100"])
+  assert.equal(second.events[0]!.occurred_at, first.events[0]!.occurred_at)
+  assert.equal(second.more, false)
+  const third = await read({ cursor: second.cursor })
+  assert.deepEqual(third.events, [])
+})
+
 test("events_list refuses a message that holds a secret, for good", async () => {
   const provider = withProvider({
     readChannel: async () => ({ messages: [{ ts: "1794996900.000100", user: "U0AAKAI001", text: `the migration key is token: ${FAKE_TOKEN}` }] }),
