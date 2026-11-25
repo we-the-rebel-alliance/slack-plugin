@@ -1,0 +1,10 @@
+# Who reviews what. The last matching line wins.
+#
+# The plugin's maintainer reviews everything. The contract maintainers also review the manifest,
+# the agent guide and the docs, where a change can affect the contract.
+
+*                              @joe-broadhead
+
+/package.json                  @joe-broadhead @we-the-rebel-alliance/contract-maintainers
+/AGENTS.md                     @joe-broadhead @we-the-rebel-alliance/contract-maintainers
+/docs/                         @joe-broadhead @we-the-rebel-alliance/contract-maintainers
