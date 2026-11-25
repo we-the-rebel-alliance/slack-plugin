@@ -4,7 +4,7 @@
     "lib": ["ES2023"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "types": ["bun"],
+    "types": ["node"],
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -14,11 +14,10 @@
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "jsx": "preserve",
-    "jsxImportSource": "@opentui/solid",
     "noEmit": true
   },
-  "include": ["src", "scripts", "test"]
+  "include": ["src", "test"]
 }
