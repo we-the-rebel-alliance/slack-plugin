@@ -38,7 +38,8 @@
     "conformance": "plugin-kit check",
     "docs": "plugin-kit docs",
     "docs:check": "plugin-kit docs --check",
-    "check": "npm run typecheck && npm run bundle && npm test && npm run test:pack && npm run actionlint && plugin-kit check && npm run docs:check"
+    "check": "npm run typecheck && npm run bundle && npm test && npm run test:pack && npm run test:host && npm run actionlint && plugin-kit check && npm run docs:check",
+    "test:host": "node --test test/host/*.test.ts"
   },
   "capabilities": {
     "version": 1,

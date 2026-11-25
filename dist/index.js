@@ -1,6 +1,567 @@
 // src/index.ts
 import { Plugin } from "@opencode/plugin";
 
+// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-L3NVT2DE.js
+var PRIVATE_KEY_BLOCK = /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----|$)/g;
+var SHAPED = Object.freeze([
+  // At a word start, with a key-like tail: 20 or more key characters, letters and digits.
+  ["api key", /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/g, (match) => /\d/.test(match.slice(3)) && /[A-Za-z]/.test(match.slice(3))],
+  ["api key", /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}/g],
+  ["api key", /\bAIza[0-9A-Za-z_-]{30,}/g],
+  ["api key", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g],
+  ["api key", /\b(?:AccountKey|SharedAccessKey)=[A-Za-z0-9+/]{20,}={0,2}/g],
+  ["token", /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{8,}/g],
+  ["token", /\bgithub_pat_[A-Za-z0-9_]{20,}/g],
+  ["token", /\bglpat-[A-Za-z0-9_-]{16,}/g],
+  ["token", /\bxox[bpars]-[A-Za-z0-9-]{10,}/g],
+  ["token", /\bnpm_[A-Za-z0-9]{30,}/g],
+  ["token", /\bhf_[A-Za-z0-9]{30,}/g],
+  ["token", /\bdop_v1_[A-Za-z0-9]{40,}/g],
+  ["token", /https:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9_/-]{20,}/g],
+  ["token", /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g]
+]);
+var BEARER = /\bBearer\s+([A-Za-z0-9._~+/=-]+)/gi;
+var AUTH_HEADER = /\b(?:authorization|x-api-key)\b["']?\s*[:=]\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s,;]+(?:[ \t]+[^\s,;]+)?))/gi;
+var CONNECTION = /\b[a-z][a-z0-9+.-]*:\/\/([^\s:@/]+):([^\s/]*)@[^\s@/]+/gi;
+var CREDENTIAL_KEYS = "api[_-]?key|apikey|access[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|client[_-]?secret|secret[_-]?key|private[_-]?key|passphrase|password|passwd|pwd|token|secret";
+var ASSIGNMENT = new RegExp(
+  String.raw`(?<![A-Za-z0-9])([A-Za-z0-9_.-]*?(${CREDENTIAL_KEYS}))["']?((?:[ \t]+(?:is|was))?[ \t]*[:=][ \t]*(?:\r?\n[ \t]*)?)(?:"([^"\n]*)"|'([^'\n]*)'|` + "`([^`\\n]*)`" + String.raw`|([^\s,;&]+))`,
+  "gi"
+);
+var PLACEHOLDER = /^(?:\[[^\]]*\]|<[^>]*>|\{\{.*\}\}|\$\{?[A-Za-z_][\w.]*\}?|%[A-Za-z_]\w*%|\*+|x{3,}|\.{2,}|…|-+|true|false|null|nil|none|undefined|string|str|number|int|bool|required|optional|env|secret|password|token|redacted|placeholder|changeme|example|your[_-]?\w*|(?:process\.env|os\.environ|env)\b.*)$/i;
+var JWT_IO_SAMPLE = /eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ|SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c/;
+var TOKENISH = /^[A-Za-z0-9._~+/=!@#$%^&*()\-:]+$/;
+function documentation(value) {
+  const v = String(value ?? "").trim();
+  return PLACEHOLDER.test(v) || /example/i.test(v) || /x{4,}/i.test(v) || /<[^>]*>/.test(v) || /\byour[-_][\w-]*here\b/i.test(v) || /\$\{|\{\{/.test(v) || JWT_IO_SAMPLE.test(v) || /[…]|\.{3}$/.test(v);
+}
+function codeValue(value) {
+  const v = String(value ?? "").trim();
+  return (
+    // `session.accessToken`, `config.secretKey`: identifiers, not a random token with digits in it.
+    /^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+;?$/.test(v) && (v.match(/\d/g) ?? []).length <= 2 || /^(?:await\s+)?[A-Za-z_$][\w$.]*\(/.test(v) || /^(?:~|\.{1,2})?\/[\w./-]*$/.test(v) || /^(?:process\.env|os\.environ|import\.meta\.env)\b/.test(v)
+  );
+}
+function entropy(value) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const char of value) counts.set(char, (counts.get(char) ?? 0) + 1);
+  let bits = 0;
+  for (const count of counts.values()) {
+    const p = count / value.length;
+    bits -= p * Math.log2(p);
+  }
+  return bits;
+}
+function tokenShaped(value, min = 12) {
+  const v = String(value ?? "").trim();
+  return v.length >= min && TOKENISH.test(v) && /\d/.test(v) && /[A-Za-z]/.test(v) && entropy(v) >= 3 && !documentation(v) && !codeValue(v);
+}
+var PROSE_WORDS = new Set(
+  "a an the is are was were be been must should shall will can may not no never always every each at least most of to in on for and or with by from via see use uses used set stored managed rotated rotate required policy characters chars minimum maximum change changed expires expire reset same as one this that it its".split(" ")
+);
+function passphrase(rest) {
+  const line = String(rest ?? "").trim();
+  if (line.length < 16 || /[.!?]$/.test(line)) return false;
+  const words = line.split(/\s+/);
+  return words.length >= 3 && words.length <= 8 && words.every((word) => /^[A-Za-z][A-Za-z'-]*$/.test(word) && !PROSE_WORDS.has(word.toLowerCase()));
+}
+function credentialValue(value, quoted, key, query) {
+  const v = String(value ?? "").trim();
+  if (!v || documentation(v)) return false;
+  if (query) return tokenShaped(v, 16);
+  const loose = /^(?:token|secret)$/i.test(key);
+  if (quoted) return v.length >= (loose ? 8 : 4) && !/^\d+(?:\.\d+)?$/.test(v) && !/^[A-Za-z_$][\w$.]*\(|^\$\{/.test(v);
+  if (codeValue(v) || !TOKENISH.test(v) || /^\d+(?:\.\d+)?$/.test(v)) return false;
+  if (v.length < (loose ? 8 : 6)) return false;
+  return /\d/.test(v) || /[^A-Za-z0-9]/.test(v) || /.[A-Z]/.test(v);
+}
+function secretKinds(text4) {
+  const value = String(text4 ?? "");
+  const kinds = /* @__PURE__ */ new Set();
+  if (new RegExp(PRIVATE_KEY_BLOCK.source).test(value)) kinds.add("private key");
+  for (const [kind, pattern, valid] of SHAPED) {
+    for (const match of value.matchAll(pattern)) if (!documentation(match[0]) && (!valid || valid(match[0]))) kinds.add(kind);
+  }
+  for (const match of value.matchAll(BEARER)) if (tokenShaped(match[1])) kinds.add("token");
+  for (const match of value.matchAll(AUTH_HEADER)) {
+    const v = String(match[1] ?? match[2] ?? match[3] ?? "").trim().replace(/^(?:Bearer|Basic|Token|Bot)\s+/i, "");
+    if (tokenShaped(v)) kinds.add("token");
+  }
+  for (const match of value.matchAll(CONNECTION)) if (match[2].length >= 3 && !documentation(match[2])) kinds.add("connection string");
+  for (const match of value.matchAll(ASSIGNMENT)) {
+    const key = match[2];
+    const quoted = match[4] ?? match[5] ?? match[6];
+    const bare = match[7];
+    const crossed = /\n/.test(match[3]);
+    if (crossed && bare !== void 0 && /^[A-Za-z_][\w.-]*[:=]/.test(bare)) continue;
+    const query = /[?&]/.test(value[match.index - 1] ?? "");
+    const password = /pass|pwd/i.test(key);
+    let found = credentialValue(quoted ?? bare, quoted !== void 0, key, query);
+    if (!found && password && quoted === void 0 && !query) {
+      const start = match.index + match[0].length - (bare ?? "").length;
+      const end = value.indexOf("\n", start);
+      found = passphrase(value.slice(start, end === -1 ? value.length : end));
+    }
+    if (found) kinds.add(password ? "password" : /token/i.test(key) ? "token" : "api key");
+  }
+  return [...kinds];
+}
+
+// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-7KJXMIQH.js
+import { createHash } from "node:crypto";
+var MAX_CURSOR_LENGTH = 1024;
+var CURSOR_VERSION = 2;
+var RESERVED_STATE_KEYS = ["v", "s", "b"];
+var plainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var BASE64URL = /^[A-Za-z0-9_-]+$/;
+function parse(cursor) {
+  if (typeof cursor !== "string" || cursor.length === 0 || cursor.length > MAX_CURSOR_LENGTH || !BASE64URL.test(cursor)) return void 0;
+  try {
+    const parsed3 = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    return plainObject(parsed3) ? parsed3 : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function canonicalScope(scope2) {
+  if (scope2 === void 0) return {};
+  if (!plainObject(scope2)) throw new Error("cursor: a scope must be an object");
+  const out = {};
+  for (const key of Object.keys(scope2).sort()) {
+    const value = scope2[key];
+    if (typeof value === "string") out[key] = value;
+    else if (Array.isArray(value) && value.every((item2) => typeof item2 === "string")) out[key] = [...new Set(value)].sort();
+    else throw new Error(`cursor: the scope key "${key}" must be a string or a list of strings`);
+  }
+  return out;
+}
+function bindingHash(binding) {
+  const canonical = JSON.stringify([binding.plugin, binding.source, binding.account, canonicalScope(binding.scope)]);
+  return createHash("sha256").update(canonical).digest("hex").slice(0, 16);
+}
+function encodeBoundCursor(binding, state) {
+  const reserved = Object.keys(state).find((key) => RESERVED_STATE_KEYS.includes(key));
+  if (reserved !== void 0) throw new Error(`cursor: the state key "${reserved}" is reserved`);
+  const cursor = Buffer.from(JSON.stringify({ v: CURSOR_VERSION, s: binding.source, b: bindingHash(binding), ...state }), "utf8").toString("base64url");
+  if (cursor.length > MAX_CURSOR_LENGTH) throw new Error(`cursor: a cursor for ${binding.plugin}/${binding.source} is ${cursor.length} characters, over ${MAX_CURSOR_LENGTH}`);
+  return cursor;
+}
+function decodeBoundCursor(binding, cursor) {
+  const parsed3 = parse(cursor);
+  if (!parsed3) return { ok: false, reason: "malformed" };
+  if (parsed3["v"] !== CURSOR_VERSION || parsed3["s"] !== binding.source || parsed3["b"] !== bindingHash(binding)) return { ok: false, reason: "foreign" };
+  const { v: _v, s: _s, b: _b, ...state } = parsed3;
+  return { ok: true, state };
+}
+
+// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-CQOJNZW4.js
+import { createHash as createHash2 } from "node:crypto";
+var MANIFEST_VERSION = 1;
+var OPENCODE_RANGE = ">=2.4.1 <2.5.0";
+var TESTED_OPENCODE = "2.4.1";
+function hostInRange(version3) {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version3));
+  if (match === null) return false;
+  const [major, minor, patch] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  return major === 2 && minor === 4 && patch >= 1;
+}
+var PLUGIN_NAME = /^[a-z0-9]{2,31}$/;
+var METHOD_CLASSES = ["read", "write", "send", "share", "delete", "export", "admin"];
+var METHOD_ACCOUNTS = ["optional", "none"];
+var METHOD_EFFECTS = ["ask", "deny"];
+var ACCOUNT_MECHANISMS = ["integration", "mcp", "local"];
+var SOURCE_SIGNALS = ["bus", "mcp-events", "webhook"];
+var COST_CLASSES = ["free", "metered", "billed"];
+var ACTION_EFFECTS = ["local", "notify", "spend", "irreversible"];
+var MAX_BYTES_LIMIT = 1048576;
+var MAX_BYTES_DEFAULT = 65536;
+var SERVICE_ID_MAX = 128;
+var SERVICE_LABEL_MAX = 64;
+var THUMBNAIL_URL_MAX = 2048;
+var DETAIL_FIELDS = ["external_id", "kind", "occurred_at", "url", "thread", "actors", "labels", "hash"];
+var EXTENSION_SEGMENT_MAX = 32;
+var EXTENSION_NAME = new RegExp(`^x-[a-z][a-z0-9-]{0,${EXTENSION_SEGMENT_MAX - 1}}/[a-z][a-z0-9-]{0,${EXTENSION_SEGMENT_MAX - 1}}$`);
+var EVENT_LIMITS = {
+  source: 64,
+  account: 128,
+  externalId: 512,
+  thread: 512,
+  title: 300,
+  text: 4096,
+  url: 2048,
+  actors: 20,
+  actorRole: 32,
+  actorId: 320,
+  actorName: 200,
+  labels: 20,
+  label: 64,
+  ownerId: 320,
+  ownerLabel: 200,
+  cursor: MAX_CURSOR_LENGTH,
+  scopeKeys: 16,
+  scopeKey: 64,
+  scopeValues: 64,
+  scopeValue: 256,
+  refused: 500,
+  failed: 500,
+  detail: 200,
+  costUnits: 8,
+  /** The identities one actor may carry, and the lengths of each part of one. */
+  identities: 10,
+  identityBasis: 64,
+  /** The metadata one event may carry. */
+  replyTo: 512,
+  domains: 20,
+  domain: 253,
+  sections: 20,
+  sectionHeading: 300,
+  parts: 50,
+  partId: 512,
+  /** The facts one event may carry, and the lengths of their fields. */
+  facts: 20,
+  factKey: 200,
+  factTitle: 300,
+  factAttribute: 120
+};
+var PAGE = { default: 100, min: 1, max: 500 };
+var MAX_PAGE_BYTES = 65536;
+var FIRST_RUN_HOURS = 24;
+var TRUST = "untrusted";
+var FACT_TYPES = ["commitment", "person.attribute", "meeting.attended"];
+var PAGE_SCHEMA = {
+  type: "object",
+  properties: {
+    source: { type: "string", minLength: 1 },
+    account: { type: "string", minLength: 1 },
+    owner: { type: "object", additionalProperties: true },
+    events: { type: "array", items: { type: "object", additionalProperties: true } },
+    cursor: { type: "string" },
+    more: { type: "boolean" },
+    trust: { type: "string", enum: [TRUST] }
+  },
+  required: ["source", "account", "owner", "events", "cursor", "more", "trust"],
+  additionalProperties: true
+};
+var EVENTS_LIST_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    source: { type: "string" },
+    cursor: { type: "string" },
+    since: { type: "string" },
+    limit: { type: "integer", minimum: PAGE.min, maximum: PAGE.max },
+    scope: { type: "object" }
+  },
+  additionalProperties: false
+};
+var ERROR_CODES = [
+  "NEEDS_SIGN_IN",
+  "SCOPE_MISSING",
+  "ACCOUNT_REQUIRED",
+  "ACCOUNT_UNKNOWN",
+  "ACCOUNT_MISMATCH",
+  "CURSOR_INVALID",
+  "CURSOR_EXPIRED",
+  "RATE_LIMITED",
+  "BUDGET_EXCEEDED",
+  "SOURCE_DISABLED",
+  "TOO_LARGE",
+  "INPUT_INVALID",
+  "SOURCE_UNKNOWN",
+  "SCHEMA_VIOLATION",
+  "PERMISSION_DENIED",
+  "PLAN_INVALID",
+  "PLAN_USED",
+  "GRANT_INVALID",
+  "HOST_UNTESTED",
+  "OPTIONS_INVALID",
+  "UNAVAILABLE"
+];
+function errorCodeOf(code) {
+  return ERROR_CODES.includes(code) ? code : void 0;
+}
+var SourceError = class extends Error {
+  code;
+  what;
+  next;
+  retryAfterSec;
+  gap;
+  constructor(init) {
+    super(`${init.code}: ${init.what.replace(/[.\s]+$/, "")}. Next step: ${init.next}`);
+    this.name = "SourceError";
+    this.code = init.code;
+    this.what = init.what;
+    this.next = init.next;
+    if (init.retryAfterSec !== void 0) this.retryAfterSec = init.retryAfterSec;
+    if (init.gap !== void 0) this.gap = init.gap;
+  }
+};
+var SINCE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
+var SOURCE_PATTERN = /^[a-z][a-z0-9-]*$/;
+var SCOPE_KEY_PATTERN = /^[a-z][A-Za-z0-9_-]*$/;
+var INPUT_KEYS = ["since", "cursor", "limit", "account", "source"];
+var hasControl = (text22) => [...text22].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
+var plainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+function sinceTime(since) {
+  if (!SINCE_PATTERN.test(since)) return void 0;
+  const time3 = Date.parse(since.length === 10 ? `${since}T00:00:00Z` : since);
+  return Number.isFinite(time3) ? time3 : void 0;
+}
+var scopeValue = (value) => typeof value === "string" && value.length > 0 && value.length <= EVENT_LIMITS.scopeValue && !hasControl(value);
+function scopeProblems(scope2, keys) {
+  if (!plainObject2(scope2)) return [`"scope" must be an object of the source's scope keys`];
+  const problems = [];
+  const entries = Object.entries(scope2);
+  if (entries.length > EVENT_LIMITS.scopeKeys) problems.push(`"scope" has more than ${EVENT_LIMITS.scopeKeys} keys`);
+  for (const [key, value] of entries) {
+    if (!keys.includes(key)) {
+      problems.push(SCOPE_KEY_PATTERN.test(key) && key.length <= EVENT_LIMITS.scopeKey ? `"scope.${key}" is not a scope key of this source` : `"scope" has a key that is not a scope key of this source`);
+      continue;
+    }
+    const ok = scopeValue(value) || Array.isArray(value) && value.length <= EVENT_LIMITS.scopeValues && value.every(scopeValue);
+    if (!ok) problems.push(`"scope.${key}" must be a value, or a list of at most ${EVENT_LIMITS.scopeValues} values, of at most ${EVENT_LIMITS.scopeValue} characters`);
+  }
+  return problems;
+}
+function parseEventsListInput(input, options = {}) {
+  const value = input === void 0 || input === null ? {} : input;
+  if (!plainObject2(value)) return { ok: false, problems: ["the input must be an object"] };
+  const scoped = (options.scopeKeys?.length ?? 0) > 0;
+  const thumbnails = options.thumbnails === true;
+  const known = [...INPUT_KEYS, ...scoped ? ["scope"] : [], ...thumbnails ? ["thumbnails"] : []];
+  const problems = Object.keys(value).filter((key) => !known.includes(key)).map((key) => `"${key}" is not an input of events_list`);
+  const { since, cursor, limit, account, source: source2, scope: scope2 } = value;
+  let time3;
+  if (since !== void 0) {
+    time3 = typeof since === "string" ? sinceTime(since) : void 0;
+    if (time3 === void 0) problems.push(`"since" must be an ISO date, or an ISO date-time with Z or an offset`);
+  }
+  if (cursor !== void 0 && (typeof cursor !== "string" || cursor.length === 0 || cursor.length > EVENT_LIMITS.cursor)) {
+    problems.push(`"cursor" must be a cursor from a previous result`);
+  }
+  if (limit !== void 0 && (typeof limit !== "number" || !Number.isInteger(limit) || limit < PAGE.min || limit > PAGE.max)) {
+    problems.push(`"limit" must be an integer from ${PAGE.min} to ${PAGE.max}`);
+  }
+  if (account !== void 0 && (typeof account !== "string" || account.length === 0 || account.length > EVENT_LIMITS.account || hasControl(account))) {
+    problems.push(`"account" must be a non-empty account name of at most ${EVENT_LIMITS.account} characters`);
+  }
+  if (source2 !== void 0 && (typeof source2 !== "string" || source2.length > EVENT_LIMITS.source || !SOURCE_PATTERN.test(source2))) {
+    problems.push(`"source" must be a source's name, a lowercase word such as gmail`);
+  }
+  if (value["thumbnails"] !== void 0 && value["thumbnails"] !== true) problems.push(`"thumbnails" must be true, or left out`);
+  if (scoped && scope2 !== void 0) problems.push(...scopeProblems(scope2, options.scopeKeys));
+  if (problems.length > 0) return { ok: false, problems };
+  return {
+    ok: true,
+    value: {
+      ...time3 === void 0 ? {} : { since: time3 },
+      ...cursor === void 0 ? {} : { cursor },
+      limit: limit ?? PAGE.default,
+      ...account === void 0 ? {} : { account },
+      ...source2 === void 0 ? {} : { source: source2 },
+      ...scoped && scope2 !== void 0 ? { scope: canonicalScope(scope2) } : {},
+      ...thumbnails && value["thumbnails"] === true ? { thumbnails: true } : {}
+    }
+  };
+}
+function startTime(request, now) {
+  return request.since ?? now - FIRST_RUN_HOURS * 36e5;
+}
+function cut(text22, max) {
+  if (text22.length <= max) return text22;
+  let end = Math.max(0, max - 1);
+  const code = text22.charCodeAt(end - 1);
+  if (end > 0 && code >= 55296 && code <= 56319) end--;
+  return `${text22.slice(0, end)}\u2026`;
+}
+function stable(value) {
+  if (Array.isArray(value)) return value.map(stable);
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.keys(value).filter((key) => value[key] !== void 0);
+    return Object.fromEntries(entries.sort().map((key) => [key, stable(value[key])]));
+  }
+  return value;
+}
+var HASHED_EVENT_FIELDS = ["reply_to", "audience", "domains", "sections", "parts", "facts"];
+function actorFields(actor) {
+  const base = [actor.role, actor.id, actor.name ?? null];
+  const extra = stable({ kind: actor.kind, identities: actor.identities, self: actor.self });
+  return Object.keys(extra).length === 0 ? base : [...base, extra];
+}
+function eventHash(event) {
+  const fields = [
+    event.source,
+    event.account,
+    event.external_id,
+    event.kind,
+    event.occurred_at,
+    event.thread,
+    event.actors.map(actorFields),
+    event.title,
+    event.text,
+    event.url,
+    event.labels
+  ];
+  for (const key of HASHED_EVENT_FIELDS) {
+    const value = event[key];
+    if (value !== void 0) fields.push([key, stable(value)]);
+  }
+  return `sha256:${createHash2("sha256").update(JSON.stringify(fields)).digest("hex")}`;
+}
+var clean = (text22) => text22.replaceAll("\0", "");
+var oneLine = (text22) => clean(text22).replace(/\s+/g, " ").trim();
+function makeEvent(draft) {
+  const time3 = draft.occurred_at instanceof Date ? draft.occurred_at.getTime() : typeof draft.occurred_at === "number" ? draft.occurred_at : Date.parse(draft.occurred_at);
+  if (!Number.isFinite(time3)) throw new Error("events-list: an event's occurred_at is not a time");
+  const seen = /* @__PURE__ */ new Set();
+  const actors = [];
+  for (const actor of draft.actors ?? []) {
+    const role = oneLine(actor.role).toLowerCase();
+    const id = oneLine(actor.id);
+    const key = `${role}\0${id}`;
+    if (!role || !id || seen.has(key) || actors.length >= EVENT_LIMITS.actors) continue;
+    seen.add(key);
+    const name = actor.name ? cut(oneLine(actor.name), EVENT_LIMITS.actorName) : "";
+    actors.push({
+      role,
+      id,
+      ...name ? { name } : {},
+      ...actor.kind === void 0 ? {} : { kind: actor.kind },
+      // An empty list says nothing, and is left out so the actor hashes as if it had none.
+      ...actor.identities === void 0 || actor.identities.length === 0 ? {} : { identities: [...actor.identities] },
+      ...actor.self === void 0 ? {} : { self: actor.self }
+    });
+  }
+  const labels = [...new Set((draft.labels ?? []).map((label) => oneLine(label).replace(/\s/g, "-")).filter((label) => label.length > 0 && label.length <= EVENT_LIMITS.label))].slice(0, EVENT_LIMITS.labels);
+  const url2 = draft.url && /^https:\/\/\S+$/.test(draft.url) && draft.url.length <= EVENT_LIMITS.url ? draft.url : null;
+  const thread2 = draft.thread ? oneLine(draft.thread) || null : null;
+  const replyTo = draft.reply_to ? cut(oneLine(draft.reply_to), EVENT_LIMITS.replyTo) : void 0;
+  const domains = draft.domains === void 0 ? void 0 : [...new Set(draft.domains.map((domain2) => oneLine(domain2).toLowerCase()))].filter((domain2) => domain2.length > 0);
+  const sections = draft.sections?.map((section) => ({ heading: cut(oneLine(section.heading), EVENT_LIMITS.sectionHeading), text: cut(clean(section.text), EVENT_LIMITS.text) })).filter((section) => section.heading.length > 0);
+  const parts = draft.parts?.map((part) => {
+    const id = cut(oneLine(part.id), EVENT_LIMITS.partId);
+    const actor = part.actor === void 0 ? "" : oneLine(part.actor);
+    return { id, text: cut(clean(part.text), EVENT_LIMITS.text), ...actor ? { actor } : {} };
+  }).filter((part) => part.id.length > 0);
+  const thumbnail = typeof draft.thumbnail === "string" && draft.thumbnail.length <= THUMBNAIL_URL_MAX && /^https:\/\/\S+$/.test(draft.thumbnail) ? draft.thumbnail : void 0;
+  const event = {
+    source: draft.source,
+    account: draft.account,
+    external_id: draft.external_id,
+    kind: draft.kind,
+    occurred_at: new Date(time3).toISOString(),
+    thread: thread2,
+    actors,
+    title: cut(oneLine(draft.title ?? ""), EVENT_LIMITS.title),
+    text: cut(clean(draft.text ?? "").trim(), EVENT_LIMITS.text),
+    url: url2,
+    labels,
+    ...replyTo === void 0 ? {} : { reply_to: replyTo },
+    ...draft.audience === void 0 || draft.audience === null ? {} : { audience: draft.audience },
+    ...domains === void 0 || domains.length === 0 ? {} : { domains },
+    ...sections === void 0 || sections.length === 0 ? {} : { sections },
+    ...parts === void 0 || parts.length === 0 ? {} : { parts },
+    ...draft.facts === void 0 || draft.facts.length === 0 ? {} : { facts: [...draft.facts] },
+    ...thumbnail === void 0 ? {} : { thumbnail }
+  };
+  return { ...event, hash: eventHash(event) };
+}
+function fitPage(events2, limit, maxBytes = MAX_PAGE_BYTES) {
+  let bytes = 2048;
+  let count = 0;
+  for (const event of events2) {
+    if (count >= limit) break;
+    bytes += Buffer.byteLength(JSON.stringify(event)) + 1;
+    if (count > 0 && bytes > maxBytes) break;
+    count++;
+  }
+  return count;
+}
+function screenEvents(events2, options = {}) {
+  const detect = options.secrets ?? secretKinds;
+  const kept = [];
+  const refused = [];
+  for (const event of events2) {
+    if (options.ownedBy && !options.ownedBy(event)) {
+      refused.push({ external_id: event.external_id, reason: "owner" });
+      continue;
+    }
+    const kinds = detect([event.title, event.text].filter(Boolean).join("\n"));
+    if (kinds.length > 0) {
+      refused.push({ external_id: event.external_id, reason: "secret", detail: cut(`holds a secret (${kinds.join(", ")})`, EVENT_LIMITS.detail) });
+      continue;
+    }
+    if (options.instruction?.(event)) {
+      refused.push({ external_id: event.external_id, reason: "instruction" });
+      continue;
+    }
+    kept.push(event);
+  }
+  return { events: kept, refused };
+}
+var PROBE_SCHEMA = {
+  type: "object",
+  properties: {
+    source: { type: "string", minLength: 1 },
+    account: { type: "string", minLength: 1 },
+    owner: { type: "object", additionalProperties: true },
+    scopes: { type: "array", items: { type: "string" } },
+    cost: { type: "object", additionalProperties: true },
+    trust: { type: "string", enum: [TRUST] }
+  },
+  required: ["source", "account", "owner", "trust"],
+  additionalProperties: false
+};
+var LIST_OPTIONS_SCHEMA = {
+  type: "object",
+  properties: {
+    options: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { id: { type: "string", minLength: 1 }, label: { type: "string", maxLength: 200 } },
+        required: ["id"],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["options"],
+  additionalProperties: false
+};
+function probeResult(identity, extras = {}) {
+  return {
+    source: identity.source,
+    account: identity.account,
+    owner: {
+      id: identity.owner.id,
+      label: identity.owner.label,
+      ...identity.owner.verified === void 0 ? {} : { verified: identity.owner.verified },
+      ...identity.owner.orgs === void 0 ? {} : { orgs: identity.owner.orgs }
+    },
+    ...extras.scopes === void 0 ? {} : { scopes: [...new Set(extras.scopes)] },
+    ...extras.cost === void 0 ? {} : { cost: extras.cost },
+    trust: TRUST
+  };
+}
+function eventsListResult(identity, events2, cursor, more, extras = {}) {
+  return {
+    source: identity.source,
+    account: identity.account,
+    owner: identity.owner,
+    events: [...events2],
+    cursor,
+    more,
+    trust: TRUST,
+    ...extras.scope === void 0 ? {} : { scope: canonicalScope(extras.scope) },
+    ...extras.refused && extras.refused.length > 0 ? { refused: [...extras.refused] } : {},
+    ...extras.failed && extras.failed.length > 0 ? { failed: [...extras.failed] } : {},
+    ...extras.removals && extras.removals.length > 0 ? { removals: [...extras.removals] } : {},
+    ...extras.gap === void 0 ? {} : { gap: extras.gap },
+    ...extras.cost === void 0 ? {} : { cost: extras.cost },
+    ...extras.plugin === void 0 ? {} : { plugin: extras.plugin },
+    ...extras.asOf === void 0 ? {} : { asOf: extras.asOf }
+  };
+}
+
 // node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-WLRWVIVP.js
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
@@ -1290,7 +1851,7 @@ var _parse = (_Err) => {
   };
   return fn;
 };
-var parse = /* @__PURE__ */ _parse($ZodRealError);
+var parse2 = /* @__PURE__ */ _parse($ZodRealError);
 var _parseAsync = (_Err) => {
   const fn = async (schema, value, _ctx, params) => {
     const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
@@ -1376,17 +1937,17 @@ var validateAsync = async (schema, value, _ctx) => {
   return result.issues.length === 0;
 };
 var _encode = (_Err) => {
-  const parse32 = _parse(_Err);
+  const parse3 = _parse(_Err);
   const fn = (schema, value, _ctx, _params) => {
     const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-    return parse32(schema, value, ctx, finalizeParams(fn, _params));
+    return parse3(schema, value, ctx, finalizeParams(fn, _params));
   };
   return fn;
 };
 var _decode = (_Err) => {
-  const parse32 = _parse(_Err);
+  const parse3 = _parse(_Err);
   const fn = (schema, value, _ctx, _params) => {
-    return parse32(schema, value, _ctx, finalizeParams(fn, _params));
+    return parse3(schema, value, _ctx, finalizeParams(fn, _params));
   };
   return fn;
 };
@@ -2864,7 +3425,7 @@ function capSize(inst, size) {
   if (!caps.length)
     return;
   const cap = Math.min(...caps.map((c) => c[0]));
-  const parse32 = inst._zod.parse;
+  const parse3 = inst._zod.parse;
   inst._zod.parse = (payload, ctx) => {
     const n = size(payload.value);
     if (n > cap && !ctx?.skipChecks && ctx?.direction !== "backward") {
@@ -2878,7 +3439,7 @@ function capSize(inst, size) {
         }
       }
     }
-    return parse32(payload, ctx);
+    return parse3(payload, ctx);
   };
 }
 var arraySize = (input) => Array.isArray(input) ? input.length : -1;
@@ -4411,10 +4972,10 @@ var $ZodFunction = /* @__PURE__ */ $constructor("$ZodFunction", (inst, def) => {
       throw new Error("implement() must be called with a function");
     }
     return Object.defineProperty(function(...args) {
-      const parsedArgs = inst._def.input ? parse(inst._def.input, args) : args;
+      const parsedArgs = inst._def.input ? parse2(inst._def.input, args) : args;
       const result = Reflect.apply(func, this, parsedArgs);
       if (inst._def.output) {
-        return parse(inst._def.output, result);
+        return parse2(inst._def.output, result);
       }
       return result;
     }, "_zod", { value: inst._zod, enumerable: false });
@@ -7157,7 +7718,7 @@ var initializer2 = (inst, issues) => {
 var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, void 0, {
   Parent: Error
 });
-var parse2 = /* @__PURE__ */ _parse(ZodRealError);
+var parse22 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse = /* @__PURE__ */ _safeParse(ZodRealError);
 var safeParseAsync = /* @__PURE__ */ _safeParseAsync(ZodRealError);
@@ -7292,7 +7853,7 @@ var ZodType = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
     util_exports.own(this, "~standard", value);
   },
   parse: function _parse2(data, params) {
-    return parse2(this, data, params, { callee: _parse2 });
+    return parse22(this, data, params, { callee: _parse2 });
   },
   parseAsync: async function _parseAsync2(data, params) {
     return await parseAsync2(this, data, params, { callee: _parseAsync2 });
@@ -9387,6 +9948,409 @@ function fromJSONSchema(schema, params) {
   return convertSchema(normalized, ctx);
 }
 
+// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-FTEX4OOT.js
+function pathText(path) {
+  if (path.length === 0) return "the value";
+  return path.map((part, index) => typeof part === "number" ? `[${part}]` : index === 0 ? String(part) : `.${String(part)}`).join("");
+}
+function problemsOf(error2) {
+  return error2.issues.map((issue2) => `${pathText(issue2.path)}: ${issue2.message}`);
+}
+function validator(name, schema) {
+  let generated;
+  const check2 = (value) => {
+    const result = schema.safeParse(value);
+    return result.success ? { ok: true, value: result.data } : { ok: false, problems: problemsOf(result.error) };
+  };
+  return {
+    name,
+    check: check2,
+    parse(value) {
+      const checked = check2(value);
+      if (checked.ok) return checked.value;
+      throw new Error(`${name}: the value breaks the schema:
+- ${checked.problems.join("\n- ")}`);
+    },
+    jsonSchema() {
+      generated ??= toJSONSchema(schema, { target: "draft-2020-12", unrepresentable: "any" });
+      return structuredClone(generated);
+    }
+  };
+}
+
+// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-SWSUBLXW.js
+var text = (max) => string2().max(max);
+var httpsUrl = string2().max(2048).refine((value) => {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}, "must be an https URL");
+var timestamp = iso_exports.datetime({ offset: true });
+var date4 = union([timestamp, string2().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date-time with an offset, or a date")]);
+var item = {
+  id: string2().min(1).max(128),
+  url: httpsUrl.optional(),
+  ask: text(200).optional()
+};
+var IMAGE_DATA_URI_MAX = 1024 * 1024 - 4 * 1024;
+var agenda = object({
+  items: array(
+    object({
+      ...item,
+      title: text(120),
+      start: date4,
+      end: date4.optional(),
+      allDay: boolean2().optional(),
+      location: text(120).optional(),
+      calendar: text(60).optional(),
+      joinUrl: httpsUrl.optional()
+    }).strict()
+  ).max(50),
+  rangeEnd: date4.optional()
+}).strict();
+var inbox = object({
+  unread: number2().int().nonnegative().nullable(),
+  unit: text(20).optional(),
+  label: text(60).optional(),
+  items: array(
+    object({
+      ...item,
+      title: text(120),
+      from: text(60).optional(),
+      preview: text(200).optional(),
+      at: timestamp,
+      count: number2().int().nonnegative().optional(),
+      important: boolean2().optional()
+    }).strict()
+  ).max(30)
+}).strict();
+var metric = object({
+  label: text(40),
+  value: union([number2().finite(), text(20)]),
+  unit: text(10).optional(),
+  delta: object({
+    value: number2().finite(),
+    direction: _enum(["up", "down", "flat"]),
+    good: boolean2().optional()
+  }).strict().optional(),
+  spark: array(number2().finite()).max(48).optional()
+}).strict();
+var list = object({
+  items: array(
+    object({
+      id: item.id,
+      text: text(200),
+      done: boolean2().optional(),
+      note: text(200).optional(),
+      due: date4.optional()
+    }).strict()
+  ).max(50),
+  editable: boolean2()
+}).strict();
+var progress = object({
+  label: text(60),
+  value: number2().nonnegative(),
+  max: number2().positive(),
+  steps: array(object({ label: text(40), done: boolean2() }).strict()).max(12).optional(),
+  eta: timestamp.optional()
+}).strict().refine((value) => value.value <= value.max, { message: "value must not exceed max", path: ["value"] });
+var note = object({ markdown: text(16 * 1024) }).strict();
+var links = object({
+  items: array(
+    object({
+      ...item,
+      title: text(60),
+      url: httpsUrl,
+      hint: text(60).optional()
+    }).strict()
+  ).max(12)
+}).strict();
+var countdown = object({
+  label: text(60),
+  target: timestamp,
+  style: _enum(["relative", "timer"])
+}).strict();
+var image = object({
+  url: httpsUrl.optional(),
+  dataUri: string2().max(IMAGE_DATA_URI_MAX).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/, "must be a base64 data URI of a png, jpeg or webp image").optional(),
+  alt: string2().min(1).max(200),
+  caption: text(120).optional()
+}).strict().refine((value) => value.url === void 0 !== (value.dataUri === void 0), { message: "give exactly one of url and dataUri" });
+var thread = object({
+  subject: text(200),
+  messages: array(
+    object({
+      ...item,
+      from: text(120),
+      at: timestamp,
+      body: text(4e3),
+      quoted: text(4e3).optional()
+    }).strict()
+  ).min(1).max(50)
+}).strict();
+var table = object({
+  columns: array(object({ key: string2().regex(/^[A-Za-z0-9_-]{1,40}$/), label: text(40) }).strict()).min(1).max(8),
+  rows: array(record(string2(), union([text(200), number2().finite(), boolean2(), _null3()]))).max(100)
+}).strict();
+var record2 = object({
+  title: text(120),
+  fields: array(object({ label: text(60), value: text(400) }).strict()).min(1).max(24)
+}).strict();
+var OUTPUTS = {
+  agenda: validator("output.agenda", agenda),
+  inbox: validator("output.inbox", inbox),
+  metric: validator("output.metric", metric),
+  list: validator("output.list", list),
+  progress: validator("output.progress", progress),
+  note: validator("output.note", note),
+  links: validator("output.links", links),
+  countdown: validator("output.countdown", countdown),
+  image: validator("output.image", image),
+  thread: validator("output.thread", thread),
+  table: validator("output.table", table),
+  record: validator("output.record", record2)
+};
+var OUTPUT_NAMES = Object.keys(OUTPUTS);
+function isOutputName(name) {
+  return typeof name === "string" && Object.hasOwn(OUTPUTS, name);
+}
+function isExtensionOutput(name) {
+  return typeof name === "string" && EXTENSION_NAME.test(name);
+}
+
+// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-QO4BENAJ.js
+import { createHash as createHash3 } from "node:crypto";
+function canonicalJson(value) {
+  return write(value, /* @__PURE__ */ new Set());
+}
+function write(value, seen) {
+  if (value === null) return "null";
+  switch (typeof value) {
+    case "string":
+      return JSON.stringify(value);
+    case "boolean":
+      return value ? "true" : "false";
+    case "number":
+      if (!Number.isFinite(value)) throw new Error("canonical JSON cannot represent a number that is not finite");
+      return Object.is(value, -0) ? "0" : JSON.stringify(value);
+    case "undefined":
+      return "null";
+    case "object":
+      break;
+    default:
+      throw new Error(`canonical JSON cannot represent a ${typeof value}`);
+  }
+  const object2 = value;
+  if (seen.has(object2)) throw new Error("canonical JSON cannot represent a cycle");
+  seen.add(object2);
+  try {
+    if (Array.isArray(value)) return `[${value.map((item2) => write(item2, seen)).join(",")}]`;
+    const record22 = value;
+    const entries = [];
+    for (const key of Object.keys(record22).sort()) {
+      const item2 = record22[key];
+      if (item2 === void 0) continue;
+      entries.push(`${JSON.stringify(key)}:${write(item2, seen)}`);
+    }
+    return `{${entries.join(",")}}`;
+  } finally {
+    seen.delete(object2);
+  }
+}
+function manifestHash(value) {
+  return `sha256:${createHash3("sha256").update(canonicalJson(value)).digest("hex")}`;
+}
+var METHOD_NAME = /^[a-z][a-z0-9_]*$/;
+var MCP_METHOD_NAME = /^mcp:(?:[a-z0-9][a-z0-9_.-]{0,99}|\*)$/;
+var SOURCE_ID = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/;
+var SCOPE_KEY = /^[a-z][a-z0-9_]{0,31}$/;
+var OPERATION = /^[A-Za-z][A-Za-z0-9._-]{0,199}$/;
+var HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+var SCHEME = /^[a-z][a-z0-9+.-]{0,31}$/;
+var VENDOR_ID = /^[a-z][a-z0-9-]{0,31}$/;
+var DOMAIN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+var ICON_TYPE = /^image\/[a-z0-9][a-z0-9.+-]*$/;
+var FILE_PATH = /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*\.md$/;
+var PRICE_PER = /^[a-z][a-z0-9-]{0,31}$/;
+var PROFILE_REF = "#/options/properties/accounts/additionalProperties";
+var nonEmpty = (max) => string2().min(1).max(max);
+var vendor = strictObject({
+  id: string2().regex(VENDOR_ID, { error: "must be a lowercase vendor id such as google" }),
+  name: nonEmpty(80),
+  domain: string2().regex(DOMAIN, { error: "must be a domain such as google.com, with no scheme or path" })
+}).describe("Who makes the provider the plugin talks to.");
+var icon = strictObject({
+  src: string2().min(1).max(200).describe("A path inside the installed package, such as assets/icon.svg."),
+  type: string2().regex(ICON_TYPE, { error: "must be an image MIME type such as image/svg+xml" })
+}).describe("One icon the package ships.");
+var host = strictObject({
+  opencode: literal(OPENCODE_RANGE, { error: `must be exactly "${OPENCODE_RANGE}" in version 1 of the contract` }),
+  tested: array(string2().min(1).max(40)).min(1).describe(`The OpenCode releases CI ran. It includes ${TESTED_OPENCODE}.`)
+}).superRefine((value, context) => {
+  if (!value.tested.includes(TESTED_OPENCODE)) context.addIssue({ code: "custom", path: ["tested"], message: `must include ${TESTED_OPENCODE}, the release this contract is tested on` });
+  if (new Set(value.tested).size !== value.tested.length) context.addIssue({ code: "custom", path: ["tested"], message: "must not repeat a release" });
+}).describe("The OpenCode range, and the releases the plugin was tested on.");
+var plugin = strictObject({
+  name: string2().regex(PLUGIN_NAME, { error: "must be 2 to 31 lowercase letters or digits, with no hyphen" }),
+  title: nonEmpty(80),
+  summary: nonEmpty(300),
+  vendor,
+  icons: array(icon).min(1).describe("At least one icon; a consumer picks the size it needs."),
+  host
+}).describe("The plugin's identity, title, summary, vendor, icons and OpenCode range.");
+var accountsInfo = strictObject({
+  via: _enum(ACCOUNT_MECHANISMS),
+  profile: strictObject({ $ref: literal(PROFILE_REF, { error: `must be { "$ref": "${PROFILE_REF}" }` }) }).describe("A JSON-Schema $ref to the profile schema in options.").optional(),
+  owner: string2().regex(SCHEME, { error: "must be a scheme such as mailto" })
+}).describe("How accounts work. Absent: the plugin signs in to nothing.");
+var methodName = string2().refine((value) => METHOD_NAME.test(value) || MCP_METHOD_NAME.test(value), {
+  error: "must be a method name such as events_list, or mcp:<tool> / mcp:*"
+});
+var methodItem = strictObject({
+  class: _enum(METHOD_CLASSES),
+  accounts: _enum(METHOD_ACCOUNTS).optional().describe("optional when the method takes an account, none when it does not. Defaults to none."),
+  operations: array(string2().regex(OPERATION, { error: "must be a provider operation of letters, digits, dots, underscores or hyphens" })).min(1).optional(),
+  plans: literal(true).optional().describe("The method dry-runs a change and answers { planId, method }."),
+  commits: methodName.optional().describe("The planning method this method commits. It then takes only { planId }."),
+  effect: _enum(METHOD_EFFECTS).optional().describe("A narrowing of the access setting: ask or deny, never allow."),
+  pinned: literal(true).optional().describe("The one method Code Mode sends on every turn. None by default.")
+}).superRefine((value, context) => {
+  if (value.plans === true && value.commits !== void 0) context.addIssue({ code: "custom", path: ["commits"], message: "a method either plans a change or commits one, not both" });
+  if (value.commits !== void 0 && !METHOD_NAME.test(value.commits)) {
+    context.addIssue({ code: "custom", path: ["commits"], message: "must name a declared method" });
+  }
+  if (value.operations !== void 0 && new Set(value.operations).size !== value.operations.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "must not repeat an operation" });
+  }
+}).describe("One callable: a contract method, a plugin tool or a pass-through MCP tool.");
+var service = strictObject({
+  id: string2().min(1).max(SERVICE_ID_MAX),
+  label: string2().min(1).max(SERVICE_LABEL_MAX)
+}).describe("The outside system a source belongs to. Sources with the same id are one service with one label.");
+var price = strictObject({
+  per: string2().regex(PRICE_PER, { error: "must be a lowercase word such as post or call" }),
+  usd: number2().finite().nonnegative()
+});
+var cost = strictObject({
+  class: _enum(COST_CLASSES),
+  units: array(price).min(1).optional()
+}).superRefine((value, context) => {
+  if (value.class === "free" && value.units !== void 0) context.addIssue({ code: "custom", path: ["units"], message: "a free source states no price units" });
+  if (value.class !== "free" && value.units === void 0) context.addIssue({ code: "custom", path: ["units"], message: `a ${value.class} source must state its price units` });
+}).describe("What one read costs. A billed or metered source states its price units.");
+var scope = strictObject({
+  keys: array(string2().regex(SCOPE_KEY, { error: "must be a lowercase scope key such as channels" })).min(1).describe("The keys a person confirms: labels, channels, repositories."),
+  describe: string2().min(1).max(200),
+  suggest: strictObject({ method: methodName, operations: array(string2().regex(OPERATION)).min(1).optional() }).describe("The read-only method that lists the values a person may pick.").optional()
+}).superRefine((value, context) => {
+  if (new Set(value.keys).size !== value.keys.length) context.addIssue({ code: "custom", path: ["keys"], message: "must not repeat a key" });
+}).describe("What a person confirms at consent.");
+var cadence = strictObject({
+  providerMinMinutes: number2().int().positive().optional(),
+  suggestMinutes: number2().int().positive().optional()
+}).describe("The provider's floor between reads, and a suggested cadence, in minutes.");
+var detail = strictObject({
+  id: string2().regex(SOURCE_ID, { error: "must be a dotted, lowercase detail id such as gws.gmail.message" }),
+  method: methodName,
+  from: array(_enum(DETAIL_FIELDS)).min(1).describe("The event fields the detail's input comes from: identifiers, never the event's prose.")
+}).describe("One follow-up read of an event's detail.");
+var sourceBase = {
+  id: string2().regex(SOURCE_ID, { error: "must be a dotted, lowercase source id such as gws.gmail" }),
+  method: methodName.describe("The declared method that reads this source."),
+  input: record(string2(), unknown()).optional().describe("The fixed input that selects this source."),
+  service: service.optional(),
+  operations: array(string2().regex(OPERATION, { error: "must be a provider operation" })).min(1).optional(),
+  scope: scope.optional(),
+  cadence: cadence.optional(),
+  signals: array(_enum(SOURCE_SIGNALS)).min(1).optional(),
+  private: boolean2().optional(),
+  cost,
+  maxBytes: number2().int().positive().max(MAX_BYTES_LIMIT, { error: `must be at most ${MAX_BYTES_LIMIT} (1 MB)` }).optional(),
+  details: array(detail).min(1).optional(),
+  facts: array(_enum(FACT_TYPES)).min(1).optional(),
+  hints: array(string2().max(200).regex(FILE_PATH, { error: "must be a relative path in the package ending in .md" })).min(1).optional(),
+  urlHosts: array(string2().regex(HOST, { error: "must be a lowercase domain, or *. and a domain for its subdomains" })).min(1).optional().describe("The hosts an event's url and thumbnail may point at.")
+};
+var eventsSource = strictObject({
+  ...sourceBase,
+  kind: literal("events"),
+  reads: string2().describe("A core event kind, or x-<name>/<kind>."),
+  thumbnails: literal(true).optional().describe("The source can answer an event's thumbnail (#42). Requires urlHosts.")
+}).superRefine((value, context) => {
+  if (value.thumbnails === true && value.urlHosts === void 0) context.addIssue({ code: "custom", path: ["thumbnails"], message: "a source that declares thumbnails must declare urlHosts" });
+  if (value.signals !== void 0 && new Set(value.signals).size !== value.signals.length) context.addIssue({ code: "custom", path: ["signals"], message: "must not repeat a signal" });
+  if (value.details !== void 0 && new Set(value.details.map((entry) => entry.id)).size !== value.details.length) context.addIssue({ code: "custom", path: ["details"], message: "must not repeat a detail id" });
+}).describe("An events source: append-only items read with a cursor.");
+var snapshotSource = strictObject({
+  ...sourceBase,
+  kind: literal("snapshot"),
+  output: string2().describe("A registry output name such as agenda, or x-<namespace>/<name>.")
+}).superRefine((value, context) => {
+  const output = value.output;
+  if (!isOutputName(output) && !isExtensionOutput(output)) context.addIssue({ code: "custom", path: ["output"], message: `"${output}" is not a registered output and not an x-<namespace>/<name>` });
+  if (value.signals !== void 0 && new Set(value.signals).size !== value.signals.length) context.addIssue({ code: "custom", path: ["signals"], message: "must not repeat a signal" });
+  if (value.details !== void 0) context.addIssue({ code: "custom", path: ["details"], message: "only an events source has detail reads" });
+}).describe("A snapshot source: the latest state, read on demand.");
+var source = discriminatedUnion("kind", [eventsSource, snapshotSource]).describe("A source: an events feed or a snapshot.");
+var action = strictObject({
+  id: string2().regex(SOURCE_ID, { error: "must be a dotted, lowercase action id such as gws.gmail.send" }),
+  effect: _enum(ACTION_EFFECTS),
+  preview: methodName.describe("The declared method that previews the action. It writes nothing."),
+  commit: methodName.describe("The declared method that commits the action. A different method from preview."),
+  input: record(string2(), unknown()).describe("JSON Schema 2020-12 for the caller's input."),
+  output: record(string2(), unknown()).describe("JSON Schema 2020-12 for the answer's output.")
+}).describe("One write an app can offer a person.");
+var events = strictObject({
+  changed: strictObject({}).optional().describe("The plugin knows a source changed."),
+  status: strictObject({}).optional().describe("The plugin's state changed."),
+  account: strictObject({}).optional().describe("An account signed in, out, or needs sign-in.")
+}).describe("The bus events the plugin emits. Each is declared with an empty object.");
+var versionField = literal(MANIFEST_VERSION);
+var optionsField = record(string2(), unknown()).describe("JSON Schema 2020-12 of the plugin's options. It must include access.");
+var normalizedMCPTool = (tool) => tool.replace(/[^A-Za-z0-9_-]/g, "_");
+var methodsField = record(methodName, methodItem).superRefine((methods, context) => {
+  const groups = /* @__PURE__ */ new Map();
+  for (const name of Object.keys(methods)) {
+    if (!name.startsWith("mcp:") || name === "mcp:*") continue;
+    const tool = name.slice("mcp:".length);
+    const effective = normalizedMCPTool(tool);
+    const group = groups.get(effective);
+    if (group === void 0) groups.set(effective, [name]);
+    else group.push(name);
+  }
+  for (const [effective, names] of groups) {
+    if (names.length < 2) continue;
+    for (const name of names) {
+      context.addIssue({
+        code: "custom",
+        path: [name],
+        message: `collides with ${names.filter((other) => other !== name).join(", ")} after OpenCode rewrites both MCP tool names to ${effective}`
+      });
+    }
+  }
+}).describe("Every callable, including pass-through MCP tools.");
+var sourcesField = array(source);
+var actionsField = array(action);
+var eventsField = events;
+var top = looseObject({
+  version: versionField,
+  plugin,
+  accounts: accountsInfo.optional(),
+  options: optionsField,
+  methods: methodsField,
+  sources: sourcesField,
+  actions: actionsField,
+  events: eventsField
+});
+function findSource(manifest2, id) {
+  return manifest2.sources.find((source2) => source2.id === id);
+}
+function maxBytesOf(source2) {
+  return source2.maxBytes ?? MAX_BYTES_DEFAULT;
+}
+
 // node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-OJKZGBMB.js
 import { hostname as hostname3, userInfo } from "node:os";
 var DEFAULT_ALIAS = "default";
@@ -9642,149 +10606,152 @@ var STATUS_SCHEMA = {
   additionalProperties: false
 };
 
-// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-FTEX4OOT.js
-function pathText(path) {
-  if (path.length === 0) return "the value";
-  return path.map((part, index) => typeof part === "number" ? `[${part}]` : index === 0 ? String(part) : `.${String(part)}`).join("");
+// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-LJBRNDIR.js
+var ACCESS_LEVELS = ["all", "ask-changes", "read-only"];
+var DEFAULT_ACCESS = "all";
+function accessLevel(options = {}) {
+  const value = options["access"];
+  if (value === void 0) return { ok: true, value: DEFAULT_ACCESS };
+  if (typeof value === "string" && ACCESS_LEVELS.includes(value)) return { ok: true, value };
+  return { ok: false, problems: [`options.access: must be one of ${ACCESS_LEVELS.join(", ")}`] };
 }
-function problemsOf(error2) {
-  return error2.issues.map((issue2) => `${pathText(issue2.path)}: ${issue2.message}`);
+function isMcpMethod(method) {
+  return method.startsWith("mcp:");
 }
-function validator(name, schema) {
-  let generated;
-  const check2 = (value) => {
-    const result = schema.safeParse(value);
-    return result.success ? { ok: true, value: result.data } : { ok: false, problems: problemsOf(result.error) };
+function methodAction(name, method) {
+  return `${name}.${method}`;
+}
+function normalizeToolName(name) {
+  return name.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+function toolAction(server, tool) {
+  const namespace = server.replaceAll(".", "_");
+  return tool === "*" ? `${namespace}_*` : `${namespace}_${normalizeToolName(tool)}`;
+}
+function effectFor(method, level) {
+  if (method.effect === "deny") return "deny";
+  const base = method.class === "read" ? "allow" : level === "all" ? "allow" : level === "ask-changes" ? "ask" : "deny";
+  return method.effect === "ask" && base === "allow" ? "ask" : base;
+}
+function serverOf(name, alias, aliases) {
+  if (!isAlias(alias)) return { ok: false, problems: [`"${alias}" is not an account alias: lowercase letters and digits, starting with a letter`] };
+  if (!aliases.includes(alias)) return { ok: false, problems: [`the account alias "${alias}" is not one this plugin declares`] };
+  return { ok: true, value: alias === DEFAULT_ALIAS ? name : `${name}-${alias}` };
+}
+function aliasesFrom(options = {}) {
+  const raw = options["accounts"];
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return [DEFAULT_ALIAS];
+  const aliases = Object.keys(raw).filter(isAlias);
+  return aliases.length === 0 ? [DEFAULT_ALIAS] : aliases;
+}
+function rulesFor(manifest2, level, aliases = [DEFAULT_ALIAS]) {
+  const name = manifest2.plugin.name;
+  const declared = aliases.length === 0 ? [DEFAULT_ALIAS] : aliases;
+  const methods = Object.entries(manifest2.methods);
+  const ordered = [...methods].sort(([left], [right]) => Number(!left.endsWith(":*")) - Number(!right.endsWith(":*")));
+  const rules = [];
+  const push = (rule) => {
+    const existing = rules.findIndex((held) => held.action === rule.action && held.resource === rule.resource);
+    if (existing !== -1) rules.splice(existing, 1);
+    rules.push(rule);
   };
+  for (const [method, item2] of ordered) {
+    const effect = effectFor(item2, level);
+    if (isMcpMethod(method)) {
+      const tool = method.slice("mcp:".length);
+      for (const alias of declared) {
+        const server = serverOf(name, alias, declared);
+        if (!server.ok) throw new Error(`access: ${server.problems.join("; ")}`);
+        push({ action: toolAction(server.value, tool), resource: "*", effect });
+      }
+      continue;
+    }
+    push({ action: methodAction(name, method), resource: "*", effect });
+  }
+  return rules;
+}
+function evaluate(rules, action2, resource = "*") {
+  return rules.findLast((rule) => wildcard(rule.action, action2) && wildcard(rule.resource, resource))?.effect ?? "ask";
+}
+function matches(pattern, value) {
+  return wildcard(pattern, value);
+}
+var wildcard = (pattern, value) => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`).test(value);
+function sameRule(held, rule) {
+  return held.action === rule.action && held.resource === rule.resource && held.effect === rule.effect;
+}
+function withRules(permissions, additions) {
+  const missing = additions.filter((addition) => !permissions.some((held) => sameRule(held, addition)));
+  if (missing.length === 0) return [...permissions];
+  const base = permissions.findIndex((rule) => rule.action === "*" && rule.resource === "*" && rule.effect === "allow");
+  const at = base + 1;
+  return [...permissions.slice(0, at), ...missing, ...permissions.slice(at)];
+}
+var rank = (effect) => effect === "allow" ? 2 : effect === "ask" ? 1 : 0;
+var concrete = (action2) => action2.replaceAll("*", "x").replaceAll("?", "x");
+function overridden(agent, rule) {
+  const index = agent.permissions.findIndex((held) => sameRule(held, rule));
+  if (index === -1) return true;
+  const action2 = concrete(rule.action);
+  if (rank(evaluate(agent.permissions, action2, rule.resource)) > rank(rule.effect)) return true;
+  for (const later of agent.permissions.slice(index + 1)) {
+    if (rank(later.effect) <= rank(rule.effect)) continue;
+    if (later.resource === "*") continue;
+    if (matches(later.action, action2) || matches(rule.action, concrete(later.action))) return true;
+  }
+  return false;
+}
+function unguardedAgents(agents, rules) {
+  return agents.filter((agent) => rules.some((rule) => overridden(agent, rule))).map((agent) => agent.id).sort();
+}
+function aliasesOf(manifest2, options) {
+  if (manifest2.accounts === void 0) return { ok: true, value: ["default"] };
+  const plan = accountsOf(manifest2, options);
+  if (!plan.ok) return plan;
+  const aliases = plan.value.accounts.map((account) => account.alias);
+  return { ok: true, value: aliases.length === 0 ? aliasesFrom(options) : aliases };
+}
+async function applyAccess(context, request) {
+  const options = request.options ?? {};
+  const level = accessLevel(options);
+  const aliases = aliasesOf(request.manifest, options);
+  const problems = [];
+  if (!level.ok) problems.push(...level.problems.map((problem) => `OPTIONS_INVALID: ${problem}. Next step: set access to all, ask-changes or read-only.`));
+  if (!aliases.ok) problems.push(...aliases.problems.map((problem) => `OPTIONS_INVALID: ${problem}. Next step: fix the accounts option.`));
+  if (!level.ok || !aliases.ok) {
+    return { level: "all", aliases: ["default"], rules: [], problems, dispose: async () => {
+    } };
+  }
+  const rules = rulesFor(request.manifest, level.value, aliases.value);
+  let registration;
+  try {
+    registration = await context.agent.transform((editor) => {
+      for (const agent of editor.list()) {
+        const updated = withRules(agent.permissions, rules);
+        if (updated.length !== agent.permissions.length) editor.update(agent.id, (target) => void (target.permissions = updated));
+      }
+    });
+  } catch (error2) {
+    problems.push(`UNAVAILABLE: the access rules could not be added to the agents: ${error2 instanceof Error ? error2.message : String(error2)}. Next step: check the agent configuration and reload the plugin.`);
+  }
   return {
-    name,
-    check: check2,
-    parse(value) {
-      const checked = check2(value);
-      if (checked.ok) return checked.value;
-      throw new Error(`${name}: the value breaks the schema:
-- ${checked.problems.join("\n- ")}`);
-    },
-    jsonSchema() {
-      generated ??= toJSONSchema(schema, { target: "draft-2020-12", unrepresentable: "any" });
-      return structuredClone(generated);
+    level: level.value,
+    aliases: aliases.value,
+    rules,
+    problems,
+    async dispose() {
+      await registration?.dispose().catch(() => void 0);
     }
   };
-}
-
-// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-L3NVT2DE.js
-var PRIVATE_KEY_BLOCK = /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----|$)/g;
-var SHAPED = Object.freeze([
-  // At a word start, with a key-like tail: 20 or more key characters, letters and digits.
-  ["api key", /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/g, (match) => /\d/.test(match.slice(3)) && /[A-Za-z]/.test(match.slice(3))],
-  ["api key", /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}/g],
-  ["api key", /\bAIza[0-9A-Za-z_-]{30,}/g],
-  ["api key", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g],
-  ["api key", /\b(?:AccountKey|SharedAccessKey)=[A-Za-z0-9+/]{20,}={0,2}/g],
-  ["token", /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{8,}/g],
-  ["token", /\bgithub_pat_[A-Za-z0-9_]{20,}/g],
-  ["token", /\bglpat-[A-Za-z0-9_-]{16,}/g],
-  ["token", /\bxox[bpars]-[A-Za-z0-9-]{10,}/g],
-  ["token", /\bnpm_[A-Za-z0-9]{30,}/g],
-  ["token", /\bhf_[A-Za-z0-9]{30,}/g],
-  ["token", /\bdop_v1_[A-Za-z0-9]{40,}/g],
-  ["token", /https:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9_/-]{20,}/g],
-  ["token", /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g]
-]);
-var BEARER = /\bBearer\s+([A-Za-z0-9._~+/=-]+)/gi;
-var AUTH_HEADER = /\b(?:authorization|x-api-key)\b["']?\s*[:=]\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s,;]+(?:[ \t]+[^\s,;]+)?))/gi;
-var CONNECTION = /\b[a-z][a-z0-9+.-]*:\/\/([^\s:@/]+):([^\s/]*)@[^\s@/]+/gi;
-var CREDENTIAL_KEYS = "api[_-]?key|apikey|access[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|client[_-]?secret|secret[_-]?key|private[_-]?key|passphrase|password|passwd|pwd|token|secret";
-var ASSIGNMENT = new RegExp(
-  String.raw`(?<![A-Za-z0-9])([A-Za-z0-9_.-]*?(${CREDENTIAL_KEYS}))["']?((?:[ \t]+(?:is|was))?[ \t]*[:=][ \t]*(?:\r?\n[ \t]*)?)(?:"([^"\n]*)"|'([^'\n]*)'|` + "`([^`\\n]*)`" + String.raw`|([^\s,;&]+))`,
-  "gi"
-);
-var PLACEHOLDER = /^(?:\[[^\]]*\]|<[^>]*>|\{\{.*\}\}|\$\{?[A-Za-z_][\w.]*\}?|%[A-Za-z_]\w*%|\*+|x{3,}|\.{2,}|…|-+|true|false|null|nil|none|undefined|string|str|number|int|bool|required|optional|env|secret|password|token|redacted|placeholder|changeme|example|your[_-]?\w*|(?:process\.env|os\.environ|env)\b.*)$/i;
-var JWT_IO_SAMPLE = /eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ|SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c/;
-var TOKENISH = /^[A-Za-z0-9._~+/=!@#$%^&*()\-:]+$/;
-function documentation(value) {
-  const v = String(value ?? "").trim();
-  return PLACEHOLDER.test(v) || /example/i.test(v) || /x{4,}/i.test(v) || /<[^>]*>/.test(v) || /\byour[-_][\w-]*here\b/i.test(v) || /\$\{|\{\{/.test(v) || JWT_IO_SAMPLE.test(v) || /[…]|\.{3}$/.test(v);
-}
-function codeValue(value) {
-  const v = String(value ?? "").trim();
-  return (
-    // `session.accessToken`, `config.secretKey`: identifiers, not a random token with digits in it.
-    /^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+;?$/.test(v) && (v.match(/\d/g) ?? []).length <= 2 || /^(?:await\s+)?[A-Za-z_$][\w$.]*\(/.test(v) || /^(?:~|\.{1,2})?\/[\w./-]*$/.test(v) || /^(?:process\.env|os\.environ|import\.meta\.env)\b/.test(v)
-  );
-}
-function entropy(value) {
-  const counts = /* @__PURE__ */ new Map();
-  for (const char of value) counts.set(char, (counts.get(char) ?? 0) + 1);
-  let bits = 0;
-  for (const count of counts.values()) {
-    const p = count / value.length;
-    bits -= p * Math.log2(p);
-  }
-  return bits;
-}
-function tokenShaped(value, min = 12) {
-  const v = String(value ?? "").trim();
-  return v.length >= min && TOKENISH.test(v) && /\d/.test(v) && /[A-Za-z]/.test(v) && entropy(v) >= 3 && !documentation(v) && !codeValue(v);
-}
-var PROSE_WORDS = new Set(
-  "a an the is are was were be been must should shall will can may not no never always every each at least most of to in on for and or with by from via see use uses used set stored managed rotated rotate required policy characters chars minimum maximum change changed expires expire reset same as one this that it its".split(" ")
-);
-function passphrase(rest) {
-  const line = String(rest ?? "").trim();
-  if (line.length < 16 || /[.!?]$/.test(line)) return false;
-  const words = line.split(/\s+/);
-  return words.length >= 3 && words.length <= 8 && words.every((word) => /^[A-Za-z][A-Za-z'-]*$/.test(word) && !PROSE_WORDS.has(word.toLowerCase()));
-}
-function credentialValue(value, quoted, key, query) {
-  const v = String(value ?? "").trim();
-  if (!v || documentation(v)) return false;
-  if (query) return tokenShaped(v, 16);
-  const loose = /^(?:token|secret)$/i.test(key);
-  if (quoted) return v.length >= (loose ? 8 : 4) && !/^\d+(?:\.\d+)?$/.test(v) && !/^[A-Za-z_$][\w$.]*\(|^\$\{/.test(v);
-  if (codeValue(v) || !TOKENISH.test(v) || /^\d+(?:\.\d+)?$/.test(v)) return false;
-  if (v.length < (loose ? 8 : 6)) return false;
-  return /\d/.test(v) || /[^A-Za-z0-9]/.test(v) || /.[A-Z]/.test(v);
-}
-function secretKinds(text4) {
-  const value = String(text4 ?? "");
-  const kinds = /* @__PURE__ */ new Set();
-  if (new RegExp(PRIVATE_KEY_BLOCK.source).test(value)) kinds.add("private key");
-  for (const [kind, pattern, valid] of SHAPED) {
-    for (const match of value.matchAll(pattern)) if (!documentation(match[0]) && (!valid || valid(match[0]))) kinds.add(kind);
-  }
-  for (const match of value.matchAll(BEARER)) if (tokenShaped(match[1])) kinds.add("token");
-  for (const match of value.matchAll(AUTH_HEADER)) {
-    const v = String(match[1] ?? match[2] ?? match[3] ?? "").trim().replace(/^(?:Bearer|Basic|Token|Bot)\s+/i, "");
-    if (tokenShaped(v)) kinds.add("token");
-  }
-  for (const match of value.matchAll(CONNECTION)) if (match[2].length >= 3 && !documentation(match[2])) kinds.add("connection string");
-  for (const match of value.matchAll(ASSIGNMENT)) {
-    const key = match[2];
-    const quoted = match[4] ?? match[5] ?? match[6];
-    const bare = match[7];
-    const crossed = /\n/.test(match[3]);
-    if (crossed && bare !== void 0 && /^[A-Za-z_][\w.-]*[:=]/.test(bare)) continue;
-    const query = /[?&]/.test(value[match.index - 1] ?? "");
-    const password = /pass|pwd/i.test(key);
-    let found = credentialValue(quoted ?? bare, quoted !== void 0, key, query);
-    if (!found && password && quoted === void 0 && !query) {
-      const start = match.index + match[0].length - (bare ?? "").length;
-      const end = value.indexOf("\n", start);
-      found = passphrase(value.slice(start, end === -1 ? value.length : end));
-    }
-    if (found) kinds.add(password ? "password" : /token/i.test(key) ? "token" : "api key");
-  }
-  return [...kinds];
 }
 
 // node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-OWUXQ6GV.js
 var BUS_EVENTS = ["changed", "status", "account"];
 var BUS_STATES = ["ready", "needs_sign_in", "error"];
 var REASON_MAX2 = 160;
-var PLUGIN_NAME = /^[a-z0-9]{2,31}$/;
+var PLUGIN_NAME2 = /^[a-z0-9]{2,31}$/;
 function isPluginName(value) {
-  return typeof value === "string" && PLUGIN_NAME.test(value);
+  return typeof value === "string" && PLUGIN_NAME2.test(value);
 }
 function assertPluginName(name) {
   if (isPluginName(name)) return;
@@ -9856,7 +10823,7 @@ function checkBusData(name, event, value) {
 }
 
 // node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-ED3MMWUJ.js
-import { createHash } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 import { createPrivateKey, createPublicKey, sign } from "node:crypto";
 import { TextDecoder } from "node:util";
 import { verify as verifySignature } from "node:crypto";
@@ -9902,7 +10869,7 @@ function textProblem(value, what, max = 200) {
   if (surrogate !== void 0) return `${what} ${surrogate}`;
   return void 0;
 }
-function accountProblem(value) {
+function accountProblem2(value) {
   const text4 = textProblem(value, "the account", 32);
   if (text4 !== void 0) return text4;
   return ACCOUNT_ALIAS.test(value) ? void 0 : "the account is not an alias: lowercase letters, digits and underscores, starting with a letter";
@@ -9956,7 +10923,7 @@ function writeArray(value, depth, sink) {
   emit(sink, "[");
   for (let index = 0; index < value.length; index++) {
     if (index > 0) emit(sink, ",");
-    write(value[index], depth + 1, sink);
+    write2(value[index], depth + 1, sink);
   }
   emit(sink, "]");
 }
@@ -9973,11 +10940,11 @@ function writeObject(value, depth, sink) {
     emitString(sink, key);
     emit(sink, ":");
     dataProperty(value, key, "an object");
-    write(value[key], depth + 1, sink);
+    write2(value[key], depth + 1, sink);
   }
   emit(sink, "}");
 }
-function write(value, depth, sink) {
+function write2(value, depth, sink) {
   if (value === null) {
     emit(sink, "null");
     return;
@@ -10008,13 +10975,13 @@ function write(value, depth, sink) {
   }
   throw new GrantInputError("a value is not a plain object or an array");
 }
-function canonicalJson(value) {
+function canonicalJson2(value) {
   const sink = { parts: [], bytes: 0 };
-  write(value, 1, sink);
+  write2(value, 1, sink);
   return sink.parts.join("");
 }
 function digestInput(input) {
-  const digest = createHash("sha256").update(canonicalJson(input), "utf8").digest("hex");
+  const digest = createHash4("sha256").update(canonicalJson2(input), "utf8").digest("hex");
   return `sha256:${digest}`;
 }
 function scopeText(value) {
@@ -10025,7 +10992,7 @@ function scopeText(value) {
   if (surrogate !== void 0) throw new GrantInputError(`a scope key or value ${surrogate}`);
   return value;
 }
-function canonicalScope(scope2) {
+function canonicalScope2(scope2) {
   if (scope2 === void 0) return {};
   if (!isPlainObject2(scope2)) throw new GrantInputError("a scope must be a plain object");
   const out = {};
@@ -10182,13 +11149,13 @@ function strictJson(text4, what) {
     throw error2;
   }
 }
-var BASE64URL = /^[A-Za-z0-9_-]+$/;
+var BASE64URL2 = /^[A-Za-z0-9_-]+$/;
 var PRIVATE_PEM = /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----/;
 var HEADER_KEYS = ["alg", "kid", "typ"];
 var CLAIM_KEYS = ["account", "act", "aud", "capability", "consumer", "digest", "exp", "iat", "jti", "manifest", "scope"];
 var decoder = new TextDecoder("utf-8", { fatal: true });
 function decodeSegment(segment) {
-  if (segment.length === 0 || !BASE64URL.test(segment)) return void 0;
+  if (segment.length === 0 || !BASE64URL2.test(segment)) return void 0;
   const bytes = Buffer.from(segment, "base64url");
   return bytes.toString("base64url") === segment ? bytes : void 0;
 }
@@ -10267,7 +11234,7 @@ function readClaims(payload) {
     const problem = textProblem(claim2, what);
     if (problem !== void 0) return claimsFailure(problem);
   }
-  const account = accountProblem(value["account"]);
+  const account = accountProblem2(value["account"]);
   if (account !== void 0) return claimsFailure(account);
   const digest = hashProblem(value["digest"], "the input digest");
   if (digest !== void 0) return claimsFailure(digest);
@@ -10281,7 +11248,7 @@ function readClaims(payload) {
   if (jti !== void 0) return claimsFailure(jti);
   let scope2;
   try {
-    scope2 = canonicalScope(value["scope"]);
+    scope2 = canonicalScope2(value["scope"]);
   } catch (error2) {
     return claimsFailure(error2 instanceof Error ? error2.message : "the scope cannot be read");
   }
@@ -10364,13 +11331,13 @@ function normalizeRequest(request) {
   if (consumer !== void 0) return requestInvalid(consumer);
   const capability = textProblem(record5["capability"], "the expected capability");
   if (capability !== void 0) return requestInvalid(capability);
-  const account = accountProblem(record5["account"]);
+  const account = accountProblem2(record5["account"]);
   if (account !== void 0) return requestInvalid(account);
   const manifest2 = hashProblem(record5["manifest"], "the expected manifest hash");
   if (manifest2 !== void 0) return requestInvalid(manifest2);
   let scope2;
   try {
-    scope2 = canonicalScope(record5["scope"]);
+    scope2 = canonicalScope2(record5["scope"]);
   } catch (error2) {
     return requestInvalid(error2 instanceof Error ? error2.message : "the expected scope cannot be read");
   }
@@ -10465,973 +11432,6 @@ async function verifyGrant(request) {
   if (firstUse === false) return failure2("GRANT_REPLAYED", "the grant has already been used");
   if (firstUse !== true) return failure2("GRANT_STORE_UNAVAILABLE", "the grant store answered something other than true or false");
   return { ok: true, kid, claims: verified };
-}
-
-// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-7KJXMIQH.js
-import { createHash as createHash2 } from "node:crypto";
-var MAX_CURSOR_LENGTH = 1024;
-var CURSOR_VERSION = 2;
-var RESERVED_STATE_KEYS = ["v", "s", "b"];
-var plainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var BASE64URL2 = /^[A-Za-z0-9_-]+$/;
-function parse3(cursor) {
-  if (typeof cursor !== "string" || cursor.length === 0 || cursor.length > MAX_CURSOR_LENGTH || !BASE64URL2.test(cursor)) return void 0;
-  try {
-    const parsed3 = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
-    return plainObject(parsed3) ? parsed3 : void 0;
-  } catch {
-    return void 0;
-  }
-}
-function canonicalScope2(scope2) {
-  if (scope2 === void 0) return {};
-  if (!plainObject(scope2)) throw new Error("cursor: a scope must be an object");
-  const out = {};
-  for (const key of Object.keys(scope2).sort()) {
-    const value = scope2[key];
-    if (typeof value === "string") out[key] = value;
-    else if (Array.isArray(value) && value.every((item2) => typeof item2 === "string")) out[key] = [...new Set(value)].sort();
-    else throw new Error(`cursor: the scope key "${key}" must be a string or a list of strings`);
-  }
-  return out;
-}
-function bindingHash(binding) {
-  const canonical = JSON.stringify([binding.plugin, binding.source, binding.account, canonicalScope2(binding.scope)]);
-  return createHash2("sha256").update(canonical).digest("hex").slice(0, 16);
-}
-function encodeBoundCursor(binding, state) {
-  const reserved = Object.keys(state).find((key) => RESERVED_STATE_KEYS.includes(key));
-  if (reserved !== void 0) throw new Error(`cursor: the state key "${reserved}" is reserved`);
-  const cursor = Buffer.from(JSON.stringify({ v: CURSOR_VERSION, s: binding.source, b: bindingHash(binding), ...state }), "utf8").toString("base64url");
-  if (cursor.length > MAX_CURSOR_LENGTH) throw new Error(`cursor: a cursor for ${binding.plugin}/${binding.source} is ${cursor.length} characters, over ${MAX_CURSOR_LENGTH}`);
-  return cursor;
-}
-function decodeBoundCursor(binding, cursor) {
-  const parsed3 = parse3(cursor);
-  if (!parsed3) return { ok: false, reason: "malformed" };
-  if (parsed3["v"] !== CURSOR_VERSION || parsed3["s"] !== binding.source || parsed3["b"] !== bindingHash(binding)) return { ok: false, reason: "foreign" };
-  const { v: _v, s: _s, b: _b, ...state } = parsed3;
-  return { ok: true, state };
-}
-
-// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-CQOJNZW4.js
-import { createHash as createHash3 } from "node:crypto";
-var MANIFEST_VERSION = 1;
-var OPENCODE_RANGE = ">=2.4.1 <2.5.0";
-var TESTED_OPENCODE = "2.4.1";
-function hostInRange(version3) {
-  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version3));
-  if (match === null) return false;
-  const [major, minor, patch] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  return major === 2 && minor === 4 && patch >= 1;
-}
-var PLUGIN_NAME2 = /^[a-z0-9]{2,31}$/;
-var METHOD_CLASSES = ["read", "write", "send", "share", "delete", "export", "admin"];
-var METHOD_ACCOUNTS = ["optional", "none"];
-var METHOD_EFFECTS = ["ask", "deny"];
-var ACCOUNT_MECHANISMS = ["integration", "mcp", "local"];
-var SOURCE_SIGNALS = ["bus", "mcp-events", "webhook"];
-var COST_CLASSES = ["free", "metered", "billed"];
-var ACTION_EFFECTS = ["local", "notify", "spend", "irreversible"];
-var MAX_BYTES_LIMIT = 1048576;
-var MAX_BYTES_DEFAULT = 65536;
-var SERVICE_ID_MAX = 128;
-var SERVICE_LABEL_MAX = 64;
-var THUMBNAIL_URL_MAX = 2048;
-var DETAIL_FIELDS = ["external_id", "kind", "occurred_at", "url", "thread", "actors", "labels", "hash"];
-var EXTENSION_SEGMENT_MAX = 32;
-var EXTENSION_NAME = new RegExp(`^x-[a-z][a-z0-9-]{0,${EXTENSION_SEGMENT_MAX - 1}}/[a-z][a-z0-9-]{0,${EXTENSION_SEGMENT_MAX - 1}}$`);
-var EVENT_LIMITS = {
-  source: 64,
-  account: 128,
-  externalId: 512,
-  thread: 512,
-  title: 300,
-  text: 4096,
-  url: 2048,
-  actors: 20,
-  actorRole: 32,
-  actorId: 320,
-  actorName: 200,
-  labels: 20,
-  label: 64,
-  ownerId: 320,
-  ownerLabel: 200,
-  cursor: MAX_CURSOR_LENGTH,
-  scopeKeys: 16,
-  scopeKey: 64,
-  scopeValues: 64,
-  scopeValue: 256,
-  refused: 500,
-  failed: 500,
-  detail: 200,
-  costUnits: 8,
-  /** The identities one actor may carry, and the lengths of each part of one. */
-  identities: 10,
-  identityBasis: 64,
-  /** The metadata one event may carry. */
-  replyTo: 512,
-  domains: 20,
-  domain: 253,
-  sections: 20,
-  sectionHeading: 300,
-  parts: 50,
-  partId: 512,
-  /** The facts one event may carry, and the lengths of their fields. */
-  facts: 20,
-  factKey: 200,
-  factTitle: 300,
-  factAttribute: 120
-};
-var PAGE = { default: 100, min: 1, max: 500 };
-var MAX_PAGE_BYTES = 65536;
-var FIRST_RUN_HOURS = 24;
-var TRUST = "untrusted";
-var FACT_TYPES = ["commitment", "person.attribute", "meeting.attended"];
-var PAGE_SCHEMA = {
-  type: "object",
-  properties: {
-    source: { type: "string", minLength: 1 },
-    account: { type: "string", minLength: 1 },
-    owner: { type: "object", additionalProperties: true },
-    events: { type: "array", items: { type: "object", additionalProperties: true } },
-    cursor: { type: "string" },
-    more: { type: "boolean" },
-    trust: { type: "string", enum: [TRUST] }
-  },
-  required: ["source", "account", "owner", "events", "cursor", "more", "trust"],
-  additionalProperties: true
-};
-var EVENTS_LIST_INPUT_SCHEMA = {
-  type: "object",
-  properties: {
-    source: { type: "string" },
-    cursor: { type: "string" },
-    since: { type: "string" },
-    limit: { type: "integer", minimum: PAGE.min, maximum: PAGE.max },
-    scope: { type: "object" }
-  },
-  additionalProperties: false
-};
-var ERROR_CODES = [
-  "NEEDS_SIGN_IN",
-  "SCOPE_MISSING",
-  "ACCOUNT_REQUIRED",
-  "ACCOUNT_UNKNOWN",
-  "ACCOUNT_MISMATCH",
-  "CURSOR_INVALID",
-  "CURSOR_EXPIRED",
-  "RATE_LIMITED",
-  "BUDGET_EXCEEDED",
-  "SOURCE_DISABLED",
-  "TOO_LARGE",
-  "INPUT_INVALID",
-  "SOURCE_UNKNOWN",
-  "SCHEMA_VIOLATION",
-  "PERMISSION_DENIED",
-  "PLAN_INVALID",
-  "PLAN_USED",
-  "GRANT_INVALID",
-  "HOST_UNTESTED",
-  "OPTIONS_INVALID",
-  "UNAVAILABLE"
-];
-function errorCodeOf(code) {
-  return ERROR_CODES.includes(code) ? code : void 0;
-}
-var SourceError = class extends Error {
-  code;
-  what;
-  next;
-  retryAfterSec;
-  gap;
-  constructor(init) {
-    super(`${init.code}: ${init.what.replace(/[.\s]+$/, "")}. Next step: ${init.next}`);
-    this.name = "SourceError";
-    this.code = init.code;
-    this.what = init.what;
-    this.next = init.next;
-    if (init.retryAfterSec !== void 0) this.retryAfterSec = init.retryAfterSec;
-    if (init.gap !== void 0) this.gap = init.gap;
-  }
-};
-var SINCE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
-var SOURCE_PATTERN = /^[a-z][a-z0-9-]*$/;
-var SCOPE_KEY_PATTERN = /^[a-z][A-Za-z0-9_-]*$/;
-var INPUT_KEYS = ["since", "cursor", "limit", "account", "source"];
-var hasControl = (text22) => [...text22].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
-var plainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-function sinceTime(since) {
-  if (!SINCE_PATTERN.test(since)) return void 0;
-  const time3 = Date.parse(since.length === 10 ? `${since}T00:00:00Z` : since);
-  return Number.isFinite(time3) ? time3 : void 0;
-}
-var scopeValue = (value) => typeof value === "string" && value.length > 0 && value.length <= EVENT_LIMITS.scopeValue && !hasControl(value);
-function scopeProblems(scope2, keys) {
-  if (!plainObject2(scope2)) return [`"scope" must be an object of the source's scope keys`];
-  const problems = [];
-  const entries = Object.entries(scope2);
-  if (entries.length > EVENT_LIMITS.scopeKeys) problems.push(`"scope" has more than ${EVENT_LIMITS.scopeKeys} keys`);
-  for (const [key, value] of entries) {
-    if (!keys.includes(key)) {
-      problems.push(SCOPE_KEY_PATTERN.test(key) && key.length <= EVENT_LIMITS.scopeKey ? `"scope.${key}" is not a scope key of this source` : `"scope" has a key that is not a scope key of this source`);
-      continue;
-    }
-    const ok = scopeValue(value) || Array.isArray(value) && value.length <= EVENT_LIMITS.scopeValues && value.every(scopeValue);
-    if (!ok) problems.push(`"scope.${key}" must be a value, or a list of at most ${EVENT_LIMITS.scopeValues} values, of at most ${EVENT_LIMITS.scopeValue} characters`);
-  }
-  return problems;
-}
-function parseEventsListInput(input, options = {}) {
-  const value = input === void 0 || input === null ? {} : input;
-  if (!plainObject2(value)) return { ok: false, problems: ["the input must be an object"] };
-  const scoped = (options.scopeKeys?.length ?? 0) > 0;
-  const thumbnails = options.thumbnails === true;
-  const known = [...INPUT_KEYS, ...scoped ? ["scope"] : [], ...thumbnails ? ["thumbnails"] : []];
-  const problems = Object.keys(value).filter((key) => !known.includes(key)).map((key) => `"${key}" is not an input of events_list`);
-  const { since, cursor, limit, account, source: source2, scope: scope2 } = value;
-  let time3;
-  if (since !== void 0) {
-    time3 = typeof since === "string" ? sinceTime(since) : void 0;
-    if (time3 === void 0) problems.push(`"since" must be an ISO date, or an ISO date-time with Z or an offset`);
-  }
-  if (cursor !== void 0 && (typeof cursor !== "string" || cursor.length === 0 || cursor.length > EVENT_LIMITS.cursor)) {
-    problems.push(`"cursor" must be a cursor from a previous result`);
-  }
-  if (limit !== void 0 && (typeof limit !== "number" || !Number.isInteger(limit) || limit < PAGE.min || limit > PAGE.max)) {
-    problems.push(`"limit" must be an integer from ${PAGE.min} to ${PAGE.max}`);
-  }
-  if (account !== void 0 && (typeof account !== "string" || account.length === 0 || account.length > EVENT_LIMITS.account || hasControl(account))) {
-    problems.push(`"account" must be a non-empty account name of at most ${EVENT_LIMITS.account} characters`);
-  }
-  if (source2 !== void 0 && (typeof source2 !== "string" || source2.length > EVENT_LIMITS.source || !SOURCE_PATTERN.test(source2))) {
-    problems.push(`"source" must be a source's name, a lowercase word such as gmail`);
-  }
-  if (value["thumbnails"] !== void 0 && value["thumbnails"] !== true) problems.push(`"thumbnails" must be true, or left out`);
-  if (scoped && scope2 !== void 0) problems.push(...scopeProblems(scope2, options.scopeKeys));
-  if (problems.length > 0) return { ok: false, problems };
-  return {
-    ok: true,
-    value: {
-      ...time3 === void 0 ? {} : { since: time3 },
-      ...cursor === void 0 ? {} : { cursor },
-      limit: limit ?? PAGE.default,
-      ...account === void 0 ? {} : { account },
-      ...source2 === void 0 ? {} : { source: source2 },
-      ...scoped && scope2 !== void 0 ? { scope: canonicalScope2(scope2) } : {},
-      ...thumbnails && value["thumbnails"] === true ? { thumbnails: true } : {}
-    }
-  };
-}
-function startTime(request, now) {
-  return request.since ?? now - FIRST_RUN_HOURS * 36e5;
-}
-function cut(text22, max) {
-  if (text22.length <= max) return text22;
-  let end = Math.max(0, max - 1);
-  const code = text22.charCodeAt(end - 1);
-  if (end > 0 && code >= 55296 && code <= 56319) end--;
-  return `${text22.slice(0, end)}\u2026`;
-}
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable);
-  if (typeof value === "object" && value !== null) {
-    const entries = Object.keys(value).filter((key) => value[key] !== void 0);
-    return Object.fromEntries(entries.sort().map((key) => [key, stable(value[key])]));
-  }
-  return value;
-}
-var HASHED_EVENT_FIELDS = ["reply_to", "audience", "domains", "sections", "parts", "facts"];
-function actorFields(actor) {
-  const base = [actor.role, actor.id, actor.name ?? null];
-  const extra = stable({ kind: actor.kind, identities: actor.identities, self: actor.self });
-  return Object.keys(extra).length === 0 ? base : [...base, extra];
-}
-function eventHash(event) {
-  const fields = [
-    event.source,
-    event.account,
-    event.external_id,
-    event.kind,
-    event.occurred_at,
-    event.thread,
-    event.actors.map(actorFields),
-    event.title,
-    event.text,
-    event.url,
-    event.labels
-  ];
-  for (const key of HASHED_EVENT_FIELDS) {
-    const value = event[key];
-    if (value !== void 0) fields.push([key, stable(value)]);
-  }
-  return `sha256:${createHash3("sha256").update(JSON.stringify(fields)).digest("hex")}`;
-}
-var clean = (text22) => text22.replaceAll("\0", "");
-var oneLine = (text22) => clean(text22).replace(/\s+/g, " ").trim();
-function makeEvent(draft) {
-  const time3 = draft.occurred_at instanceof Date ? draft.occurred_at.getTime() : typeof draft.occurred_at === "number" ? draft.occurred_at : Date.parse(draft.occurred_at);
-  if (!Number.isFinite(time3)) throw new Error("events-list: an event's occurred_at is not a time");
-  const seen = /* @__PURE__ */ new Set();
-  const actors = [];
-  for (const actor of draft.actors ?? []) {
-    const role = oneLine(actor.role).toLowerCase();
-    const id = oneLine(actor.id);
-    const key = `${role}\0${id}`;
-    if (!role || !id || seen.has(key) || actors.length >= EVENT_LIMITS.actors) continue;
-    seen.add(key);
-    const name = actor.name ? cut(oneLine(actor.name), EVENT_LIMITS.actorName) : "";
-    actors.push({
-      role,
-      id,
-      ...name ? { name } : {},
-      ...actor.kind === void 0 ? {} : { kind: actor.kind },
-      // An empty list says nothing, and is left out so the actor hashes as if it had none.
-      ...actor.identities === void 0 || actor.identities.length === 0 ? {} : { identities: [...actor.identities] },
-      ...actor.self === void 0 ? {} : { self: actor.self }
-    });
-  }
-  const labels = [...new Set((draft.labels ?? []).map((label) => oneLine(label).replace(/\s/g, "-")).filter((label) => label.length > 0 && label.length <= EVENT_LIMITS.label))].slice(0, EVENT_LIMITS.labels);
-  const url2 = draft.url && /^https:\/\/\S+$/.test(draft.url) && draft.url.length <= EVENT_LIMITS.url ? draft.url : null;
-  const thread2 = draft.thread ? oneLine(draft.thread) || null : null;
-  const replyTo = draft.reply_to ? cut(oneLine(draft.reply_to), EVENT_LIMITS.replyTo) : void 0;
-  const domains = draft.domains === void 0 ? void 0 : [...new Set(draft.domains.map((domain2) => oneLine(domain2).toLowerCase()))].filter((domain2) => domain2.length > 0);
-  const sections = draft.sections?.map((section) => ({ heading: cut(oneLine(section.heading), EVENT_LIMITS.sectionHeading), text: cut(clean(section.text), EVENT_LIMITS.text) })).filter((section) => section.heading.length > 0);
-  const parts = draft.parts?.map((part) => {
-    const id = cut(oneLine(part.id), EVENT_LIMITS.partId);
-    const actor = part.actor === void 0 ? "" : oneLine(part.actor);
-    return { id, text: cut(clean(part.text), EVENT_LIMITS.text), ...actor ? { actor } : {} };
-  }).filter((part) => part.id.length > 0);
-  const thumbnail = typeof draft.thumbnail === "string" && draft.thumbnail.length <= THUMBNAIL_URL_MAX && /^https:\/\/\S+$/.test(draft.thumbnail) ? draft.thumbnail : void 0;
-  const event = {
-    source: draft.source,
-    account: draft.account,
-    external_id: draft.external_id,
-    kind: draft.kind,
-    occurred_at: new Date(time3).toISOString(),
-    thread: thread2,
-    actors,
-    title: cut(oneLine(draft.title ?? ""), EVENT_LIMITS.title),
-    text: cut(clean(draft.text ?? "").trim(), EVENT_LIMITS.text),
-    url: url2,
-    labels,
-    ...replyTo === void 0 ? {} : { reply_to: replyTo },
-    ...draft.audience === void 0 || draft.audience === null ? {} : { audience: draft.audience },
-    ...domains === void 0 || domains.length === 0 ? {} : { domains },
-    ...sections === void 0 || sections.length === 0 ? {} : { sections },
-    ...parts === void 0 || parts.length === 0 ? {} : { parts },
-    ...draft.facts === void 0 || draft.facts.length === 0 ? {} : { facts: [...draft.facts] },
-    ...thumbnail === void 0 ? {} : { thumbnail }
-  };
-  return { ...event, hash: eventHash(event) };
-}
-function fitPage(events2, limit, maxBytes = MAX_PAGE_BYTES) {
-  let bytes = 2048;
-  let count = 0;
-  for (const event of events2) {
-    if (count >= limit) break;
-    bytes += Buffer.byteLength(JSON.stringify(event)) + 1;
-    if (count > 0 && bytes > maxBytes) break;
-    count++;
-  }
-  return count;
-}
-function screenEvents(events2, options = {}) {
-  const detect = options.secrets ?? secretKinds;
-  const kept = [];
-  const refused = [];
-  for (const event of events2) {
-    if (options.ownedBy && !options.ownedBy(event)) {
-      refused.push({ external_id: event.external_id, reason: "owner" });
-      continue;
-    }
-    const kinds = detect([event.title, event.text].filter(Boolean).join("\n"));
-    if (kinds.length > 0) {
-      refused.push({ external_id: event.external_id, reason: "secret", detail: cut(`holds a secret (${kinds.join(", ")})`, EVENT_LIMITS.detail) });
-      continue;
-    }
-    if (options.instruction?.(event)) {
-      refused.push({ external_id: event.external_id, reason: "instruction" });
-      continue;
-    }
-    kept.push(event);
-  }
-  return { events: kept, refused };
-}
-var PROBE_SCHEMA = {
-  type: "object",
-  properties: {
-    source: { type: "string", minLength: 1 },
-    account: { type: "string", minLength: 1 },
-    owner: { type: "object", additionalProperties: true },
-    scopes: { type: "array", items: { type: "string" } },
-    cost: { type: "object", additionalProperties: true },
-    trust: { type: "string", enum: [TRUST] }
-  },
-  required: ["source", "account", "owner", "trust"],
-  additionalProperties: false
-};
-var LIST_OPTIONS_SCHEMA = {
-  type: "object",
-  properties: {
-    options: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: { id: { type: "string", minLength: 1 }, label: { type: "string", maxLength: 200 } },
-        required: ["id"],
-        additionalProperties: false
-      }
-    }
-  },
-  required: ["options"],
-  additionalProperties: false
-};
-function probeResult(identity, extras = {}) {
-  return {
-    source: identity.source,
-    account: identity.account,
-    owner: {
-      id: identity.owner.id,
-      label: identity.owner.label,
-      ...identity.owner.verified === void 0 ? {} : { verified: identity.owner.verified },
-      ...identity.owner.orgs === void 0 ? {} : { orgs: identity.owner.orgs }
-    },
-    ...extras.scopes === void 0 ? {} : { scopes: [...new Set(extras.scopes)] },
-    ...extras.cost === void 0 ? {} : { cost: extras.cost },
-    trust: TRUST
-  };
-}
-function eventsListResult(identity, events2, cursor, more, extras = {}) {
-  return {
-    source: identity.source,
-    account: identity.account,
-    owner: identity.owner,
-    events: [...events2],
-    cursor,
-    more,
-    trust: TRUST,
-    ...extras.scope === void 0 ? {} : { scope: canonicalScope2(extras.scope) },
-    ...extras.refused && extras.refused.length > 0 ? { refused: [...extras.refused] } : {},
-    ...extras.failed && extras.failed.length > 0 ? { failed: [...extras.failed] } : {},
-    ...extras.removals && extras.removals.length > 0 ? { removals: [...extras.removals] } : {},
-    ...extras.gap === void 0 ? {} : { gap: extras.gap },
-    ...extras.cost === void 0 ? {} : { cost: extras.cost },
-    ...extras.plugin === void 0 ? {} : { plugin: extras.plugin },
-    ...extras.asOf === void 0 ? {} : { asOf: extras.asOf }
-  };
-}
-
-// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-SWSUBLXW.js
-var text = (max) => string2().max(max);
-var httpsUrl = string2().max(2048).refine((value) => {
-  try {
-    return new URL(value).protocol === "https:";
-  } catch {
-    return false;
-  }
-}, "must be an https URL");
-var timestamp = iso_exports.datetime({ offset: true });
-var date4 = union([timestamp, string2().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date-time with an offset, or a date")]);
-var item = {
-  id: string2().min(1).max(128),
-  url: httpsUrl.optional(),
-  ask: text(200).optional()
-};
-var IMAGE_DATA_URI_MAX = 1024 * 1024 - 4 * 1024;
-var agenda = object({
-  items: array(
-    object({
-      ...item,
-      title: text(120),
-      start: date4,
-      end: date4.optional(),
-      allDay: boolean2().optional(),
-      location: text(120).optional(),
-      calendar: text(60).optional(),
-      joinUrl: httpsUrl.optional()
-    }).strict()
-  ).max(50),
-  rangeEnd: date4.optional()
-}).strict();
-var inbox = object({
-  unread: number2().int().nonnegative().nullable(),
-  unit: text(20).optional(),
-  label: text(60).optional(),
-  items: array(
-    object({
-      ...item,
-      title: text(120),
-      from: text(60).optional(),
-      preview: text(200).optional(),
-      at: timestamp,
-      count: number2().int().nonnegative().optional(),
-      important: boolean2().optional()
-    }).strict()
-  ).max(30)
-}).strict();
-var metric = object({
-  label: text(40),
-  value: union([number2().finite(), text(20)]),
-  unit: text(10).optional(),
-  delta: object({
-    value: number2().finite(),
-    direction: _enum(["up", "down", "flat"]),
-    good: boolean2().optional()
-  }).strict().optional(),
-  spark: array(number2().finite()).max(48).optional()
-}).strict();
-var list = object({
-  items: array(
-    object({
-      id: item.id,
-      text: text(200),
-      done: boolean2().optional(),
-      note: text(200).optional(),
-      due: date4.optional()
-    }).strict()
-  ).max(50),
-  editable: boolean2()
-}).strict();
-var progress = object({
-  label: text(60),
-  value: number2().nonnegative(),
-  max: number2().positive(),
-  steps: array(object({ label: text(40), done: boolean2() }).strict()).max(12).optional(),
-  eta: timestamp.optional()
-}).strict().refine((value) => value.value <= value.max, { message: "value must not exceed max", path: ["value"] });
-var note = object({ markdown: text(16 * 1024) }).strict();
-var links = object({
-  items: array(
-    object({
-      ...item,
-      title: text(60),
-      url: httpsUrl,
-      hint: text(60).optional()
-    }).strict()
-  ).max(12)
-}).strict();
-var countdown = object({
-  label: text(60),
-  target: timestamp,
-  style: _enum(["relative", "timer"])
-}).strict();
-var image = object({
-  url: httpsUrl.optional(),
-  dataUri: string2().max(IMAGE_DATA_URI_MAX).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/, "must be a base64 data URI of a png, jpeg or webp image").optional(),
-  alt: string2().min(1).max(200),
-  caption: text(120).optional()
-}).strict().refine((value) => value.url === void 0 !== (value.dataUri === void 0), { message: "give exactly one of url and dataUri" });
-var thread = object({
-  subject: text(200),
-  messages: array(
-    object({
-      ...item,
-      from: text(120),
-      at: timestamp,
-      body: text(4e3),
-      quoted: text(4e3).optional()
-    }).strict()
-  ).min(1).max(50)
-}).strict();
-var table = object({
-  columns: array(object({ key: string2().regex(/^[A-Za-z0-9_-]{1,40}$/), label: text(40) }).strict()).min(1).max(8),
-  rows: array(record(string2(), union([text(200), number2().finite(), boolean2(), _null3()]))).max(100)
-}).strict();
-var record2 = object({
-  title: text(120),
-  fields: array(object({ label: text(60), value: text(400) }).strict()).min(1).max(24)
-}).strict();
-var OUTPUTS = {
-  agenda: validator("output.agenda", agenda),
-  inbox: validator("output.inbox", inbox),
-  metric: validator("output.metric", metric),
-  list: validator("output.list", list),
-  progress: validator("output.progress", progress),
-  note: validator("output.note", note),
-  links: validator("output.links", links),
-  countdown: validator("output.countdown", countdown),
-  image: validator("output.image", image),
-  thread: validator("output.thread", thread),
-  table: validator("output.table", table),
-  record: validator("output.record", record2)
-};
-var OUTPUT_NAMES = Object.keys(OUTPUTS);
-function isOutputName(name) {
-  return typeof name === "string" && Object.hasOwn(OUTPUTS, name);
-}
-function isExtensionOutput(name) {
-  return typeof name === "string" && EXTENSION_NAME.test(name);
-}
-
-// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-QO4BENAJ.js
-import { createHash as createHash4 } from "node:crypto";
-function canonicalJson2(value) {
-  return write2(value, /* @__PURE__ */ new Set());
-}
-function write2(value, seen) {
-  if (value === null) return "null";
-  switch (typeof value) {
-    case "string":
-      return JSON.stringify(value);
-    case "boolean":
-      return value ? "true" : "false";
-    case "number":
-      if (!Number.isFinite(value)) throw new Error("canonical JSON cannot represent a number that is not finite");
-      return Object.is(value, -0) ? "0" : JSON.stringify(value);
-    case "undefined":
-      return "null";
-    case "object":
-      break;
-    default:
-      throw new Error(`canonical JSON cannot represent a ${typeof value}`);
-  }
-  const object2 = value;
-  if (seen.has(object2)) throw new Error("canonical JSON cannot represent a cycle");
-  seen.add(object2);
-  try {
-    if (Array.isArray(value)) return `[${value.map((item2) => write2(item2, seen)).join(",")}]`;
-    const record22 = value;
-    const entries = [];
-    for (const key of Object.keys(record22).sort()) {
-      const item2 = record22[key];
-      if (item2 === void 0) continue;
-      entries.push(`${JSON.stringify(key)}:${write2(item2, seen)}`);
-    }
-    return `{${entries.join(",")}}`;
-  } finally {
-    seen.delete(object2);
-  }
-}
-function manifestHash(value) {
-  return `sha256:${createHash4("sha256").update(canonicalJson2(value)).digest("hex")}`;
-}
-var METHOD_NAME = /^[a-z][a-z0-9_]*$/;
-var MCP_METHOD_NAME = /^mcp:(?:[a-z0-9][a-z0-9_.-]{0,99}|\*)$/;
-var SOURCE_ID = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/;
-var SCOPE_KEY = /^[a-z][a-z0-9_]{0,31}$/;
-var OPERATION = /^[A-Za-z][A-Za-z0-9._-]{0,199}$/;
-var HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
-var SCHEME = /^[a-z][a-z0-9+.-]{0,31}$/;
-var VENDOR_ID = /^[a-z][a-z0-9-]{0,31}$/;
-var DOMAIN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
-var ICON_TYPE = /^image\/[a-z0-9][a-z0-9.+-]*$/;
-var FILE_PATH = /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*\.md$/;
-var PRICE_PER = /^[a-z][a-z0-9-]{0,31}$/;
-var PROFILE_REF = "#/options/properties/accounts/additionalProperties";
-var nonEmpty = (max) => string2().min(1).max(max);
-var vendor = strictObject({
-  id: string2().regex(VENDOR_ID, { error: "must be a lowercase vendor id such as google" }),
-  name: nonEmpty(80),
-  domain: string2().regex(DOMAIN, { error: "must be a domain such as google.com, with no scheme or path" })
-}).describe("Who makes the provider the plugin talks to.");
-var icon = strictObject({
-  src: string2().min(1).max(200).describe("A path inside the installed package, such as assets/icon.svg."),
-  type: string2().regex(ICON_TYPE, { error: "must be an image MIME type such as image/svg+xml" })
-}).describe("One icon the package ships.");
-var host = strictObject({
-  opencode: literal(OPENCODE_RANGE, { error: `must be exactly "${OPENCODE_RANGE}" in version 1 of the contract` }),
-  tested: array(string2().min(1).max(40)).min(1).describe(`The OpenCode releases CI ran. It includes ${TESTED_OPENCODE}.`)
-}).superRefine((value, context) => {
-  if (!value.tested.includes(TESTED_OPENCODE)) context.addIssue({ code: "custom", path: ["tested"], message: `must include ${TESTED_OPENCODE}, the release this contract is tested on` });
-  if (new Set(value.tested).size !== value.tested.length) context.addIssue({ code: "custom", path: ["tested"], message: "must not repeat a release" });
-}).describe("The OpenCode range, and the releases the plugin was tested on.");
-var plugin = strictObject({
-  name: string2().regex(PLUGIN_NAME2, { error: "must be 2 to 31 lowercase letters or digits, with no hyphen" }),
-  title: nonEmpty(80),
-  summary: nonEmpty(300),
-  vendor,
-  icons: array(icon).min(1).describe("At least one icon; a consumer picks the size it needs."),
-  host
-}).describe("The plugin's identity, title, summary, vendor, icons and OpenCode range.");
-var accountsInfo = strictObject({
-  via: _enum(ACCOUNT_MECHANISMS),
-  profile: strictObject({ $ref: literal(PROFILE_REF, { error: `must be { "$ref": "${PROFILE_REF}" }` }) }).describe("A JSON-Schema $ref to the profile schema in options.").optional(),
-  owner: string2().regex(SCHEME, { error: "must be a scheme such as mailto" })
-}).describe("How accounts work. Absent: the plugin signs in to nothing.");
-var methodName = string2().refine((value) => METHOD_NAME.test(value) || MCP_METHOD_NAME.test(value), {
-  error: "must be a method name such as events_list, or mcp:<tool> / mcp:*"
-});
-var methodItem = strictObject({
-  class: _enum(METHOD_CLASSES),
-  accounts: _enum(METHOD_ACCOUNTS).optional().describe("optional when the method takes an account, none when it does not. Defaults to none."),
-  operations: array(string2().regex(OPERATION, { error: "must be a provider operation of letters, digits, dots, underscores or hyphens" })).min(1).optional(),
-  plans: literal(true).optional().describe("The method dry-runs a change and answers { planId, method }."),
-  commits: methodName.optional().describe("The planning method this method commits. It then takes only { planId }."),
-  effect: _enum(METHOD_EFFECTS).optional().describe("A narrowing of the access setting: ask or deny, never allow."),
-  pinned: literal(true).optional().describe("The one method Code Mode sends on every turn. None by default.")
-}).superRefine((value, context) => {
-  if (value.plans === true && value.commits !== void 0) context.addIssue({ code: "custom", path: ["commits"], message: "a method either plans a change or commits one, not both" });
-  if (value.commits !== void 0 && !METHOD_NAME.test(value.commits)) {
-    context.addIssue({ code: "custom", path: ["commits"], message: "must name a declared method" });
-  }
-  if (value.operations !== void 0 && new Set(value.operations).size !== value.operations.length) {
-    context.addIssue({ code: "custom", path: ["operations"], message: "must not repeat an operation" });
-  }
-}).describe("One callable: a contract method, a plugin tool or a pass-through MCP tool.");
-var service = strictObject({
-  id: string2().min(1).max(SERVICE_ID_MAX),
-  label: string2().min(1).max(SERVICE_LABEL_MAX)
-}).describe("The outside system a source belongs to. Sources with the same id are one service with one label.");
-var price = strictObject({
-  per: string2().regex(PRICE_PER, { error: "must be a lowercase word such as post or call" }),
-  usd: number2().finite().nonnegative()
-});
-var cost = strictObject({
-  class: _enum(COST_CLASSES),
-  units: array(price).min(1).optional()
-}).superRefine((value, context) => {
-  if (value.class === "free" && value.units !== void 0) context.addIssue({ code: "custom", path: ["units"], message: "a free source states no price units" });
-  if (value.class !== "free" && value.units === void 0) context.addIssue({ code: "custom", path: ["units"], message: `a ${value.class} source must state its price units` });
-}).describe("What one read costs. A billed or metered source states its price units.");
-var scope = strictObject({
-  keys: array(string2().regex(SCOPE_KEY, { error: "must be a lowercase scope key such as channels" })).min(1).describe("The keys a person confirms: labels, channels, repositories."),
-  describe: string2().min(1).max(200),
-  suggest: strictObject({ method: methodName, operations: array(string2().regex(OPERATION)).min(1).optional() }).describe("The read-only method that lists the values a person may pick.").optional()
-}).superRefine((value, context) => {
-  if (new Set(value.keys).size !== value.keys.length) context.addIssue({ code: "custom", path: ["keys"], message: "must not repeat a key" });
-}).describe("What a person confirms at consent.");
-var cadence = strictObject({
-  providerMinMinutes: number2().int().positive().optional(),
-  suggestMinutes: number2().int().positive().optional()
-}).describe("The provider's floor between reads, and a suggested cadence, in minutes.");
-var detail = strictObject({
-  id: string2().regex(SOURCE_ID, { error: "must be a dotted, lowercase detail id such as gws.gmail.message" }),
-  method: methodName,
-  from: array(_enum(DETAIL_FIELDS)).min(1).describe("The event fields the detail's input comes from: identifiers, never the event's prose.")
-}).describe("One follow-up read of an event's detail.");
-var sourceBase = {
-  id: string2().regex(SOURCE_ID, { error: "must be a dotted, lowercase source id such as gws.gmail" }),
-  method: methodName.describe("The declared method that reads this source."),
-  input: record(string2(), unknown()).optional().describe("The fixed input that selects this source."),
-  service: service.optional(),
-  operations: array(string2().regex(OPERATION, { error: "must be a provider operation" })).min(1).optional(),
-  scope: scope.optional(),
-  cadence: cadence.optional(),
-  signals: array(_enum(SOURCE_SIGNALS)).min(1).optional(),
-  private: boolean2().optional(),
-  cost,
-  maxBytes: number2().int().positive().max(MAX_BYTES_LIMIT, { error: `must be at most ${MAX_BYTES_LIMIT} (1 MB)` }).optional(),
-  details: array(detail).min(1).optional(),
-  facts: array(_enum(FACT_TYPES)).min(1).optional(),
-  hints: array(string2().max(200).regex(FILE_PATH, { error: "must be a relative path in the package ending in .md" })).min(1).optional(),
-  urlHosts: array(string2().regex(HOST, { error: "must be a lowercase domain, or *. and a domain for its subdomains" })).min(1).optional().describe("The hosts an event's url and thumbnail may point at.")
-};
-var eventsSource = strictObject({
-  ...sourceBase,
-  kind: literal("events"),
-  reads: string2().describe("A core event kind, or x-<name>/<kind>."),
-  thumbnails: literal(true).optional().describe("The source can answer an event's thumbnail (#42). Requires urlHosts.")
-}).superRefine((value, context) => {
-  if (value.thumbnails === true && value.urlHosts === void 0) context.addIssue({ code: "custom", path: ["thumbnails"], message: "a source that declares thumbnails must declare urlHosts" });
-  if (value.signals !== void 0 && new Set(value.signals).size !== value.signals.length) context.addIssue({ code: "custom", path: ["signals"], message: "must not repeat a signal" });
-  if (value.details !== void 0 && new Set(value.details.map((entry) => entry.id)).size !== value.details.length) context.addIssue({ code: "custom", path: ["details"], message: "must not repeat a detail id" });
-}).describe("An events source: append-only items read with a cursor.");
-var snapshotSource = strictObject({
-  ...sourceBase,
-  kind: literal("snapshot"),
-  output: string2().describe("A registry output name such as agenda, or x-<namespace>/<name>.")
-}).superRefine((value, context) => {
-  const output = value.output;
-  if (!isOutputName(output) && !isExtensionOutput(output)) context.addIssue({ code: "custom", path: ["output"], message: `"${output}" is not a registered output and not an x-<namespace>/<name>` });
-  if (value.signals !== void 0 && new Set(value.signals).size !== value.signals.length) context.addIssue({ code: "custom", path: ["signals"], message: "must not repeat a signal" });
-  if (value.details !== void 0) context.addIssue({ code: "custom", path: ["details"], message: "only an events source has detail reads" });
-}).describe("A snapshot source: the latest state, read on demand.");
-var source = discriminatedUnion("kind", [eventsSource, snapshotSource]).describe("A source: an events feed or a snapshot.");
-var action = strictObject({
-  id: string2().regex(SOURCE_ID, { error: "must be a dotted, lowercase action id such as gws.gmail.send" }),
-  effect: _enum(ACTION_EFFECTS),
-  preview: methodName.describe("The declared method that previews the action. It writes nothing."),
-  commit: methodName.describe("The declared method that commits the action. A different method from preview."),
-  input: record(string2(), unknown()).describe("JSON Schema 2020-12 for the caller's input."),
-  output: record(string2(), unknown()).describe("JSON Schema 2020-12 for the answer's output.")
-}).describe("One write an app can offer a person.");
-var events = strictObject({
-  changed: strictObject({}).optional().describe("The plugin knows a source changed."),
-  status: strictObject({}).optional().describe("The plugin's state changed."),
-  account: strictObject({}).optional().describe("An account signed in, out, or needs sign-in.")
-}).describe("The bus events the plugin emits. Each is declared with an empty object.");
-var versionField = literal(MANIFEST_VERSION);
-var optionsField = record(string2(), unknown()).describe("JSON Schema 2020-12 of the plugin's options. It must include access.");
-var normalizedMCPTool = (tool) => tool.replace(/[^A-Za-z0-9_-]/g, "_");
-var methodsField = record(methodName, methodItem).superRefine((methods, context) => {
-  const groups = /* @__PURE__ */ new Map();
-  for (const name of Object.keys(methods)) {
-    if (!name.startsWith("mcp:") || name === "mcp:*") continue;
-    const tool = name.slice("mcp:".length);
-    const effective = normalizedMCPTool(tool);
-    const group = groups.get(effective);
-    if (group === void 0) groups.set(effective, [name]);
-    else group.push(name);
-  }
-  for (const [effective, names] of groups) {
-    if (names.length < 2) continue;
-    for (const name of names) {
-      context.addIssue({
-        code: "custom",
-        path: [name],
-        message: `collides with ${names.filter((other) => other !== name).join(", ")} after OpenCode rewrites both MCP tool names to ${effective}`
-      });
-    }
-  }
-}).describe("Every callable, including pass-through MCP tools.");
-var sourcesField = array(source);
-var actionsField = array(action);
-var eventsField = events;
-var top = looseObject({
-  version: versionField,
-  plugin,
-  accounts: accountsInfo.optional(),
-  options: optionsField,
-  methods: methodsField,
-  sources: sourcesField,
-  actions: actionsField,
-  events: eventsField
-});
-function findSource(manifest2, id) {
-  return manifest2.sources.find((source2) => source2.id === id);
-}
-function maxBytesOf(source2) {
-  return source2.maxBytes ?? MAX_BYTES_DEFAULT;
-}
-
-// node_modules/@we-the-rebel-alliance/plugin-contract/dist/chunks/chunk-LJBRNDIR.js
-var ACCESS_LEVELS = ["all", "ask-changes", "read-only"];
-var DEFAULT_ACCESS = "all";
-function accessLevel(options = {}) {
-  const value = options["access"];
-  if (value === void 0) return { ok: true, value: DEFAULT_ACCESS };
-  if (typeof value === "string" && ACCESS_LEVELS.includes(value)) return { ok: true, value };
-  return { ok: false, problems: [`options.access: must be one of ${ACCESS_LEVELS.join(", ")}`] };
-}
-function isMcpMethod(method) {
-  return method.startsWith("mcp:");
-}
-function methodAction(name, method) {
-  return `${name}.${method}`;
-}
-function normalizeToolName(name) {
-  return name.replace(/[^a-zA-Z0-9_-]/g, "_");
-}
-function toolAction(server, tool) {
-  const namespace = server.replaceAll(".", "_");
-  return tool === "*" ? `${namespace}_*` : `${namespace}_${normalizeToolName(tool)}`;
-}
-function effectFor(method, level) {
-  if (method.effect === "deny") return "deny";
-  const base = method.class === "read" ? "allow" : level === "all" ? "allow" : level === "ask-changes" ? "ask" : "deny";
-  return method.effect === "ask" && base === "allow" ? "ask" : base;
-}
-function serverOf(name, alias, aliases) {
-  if (!isAlias(alias)) return { ok: false, problems: [`"${alias}" is not an account alias: lowercase letters and digits, starting with a letter`] };
-  if (!aliases.includes(alias)) return { ok: false, problems: [`the account alias "${alias}" is not one this plugin declares`] };
-  return { ok: true, value: alias === DEFAULT_ALIAS ? name : `${name}-${alias}` };
-}
-function aliasesFrom(options = {}) {
-  const raw = options["accounts"];
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return [DEFAULT_ALIAS];
-  const aliases = Object.keys(raw).filter(isAlias);
-  return aliases.length === 0 ? [DEFAULT_ALIAS] : aliases;
-}
-function rulesFor(manifest2, level, aliases = [DEFAULT_ALIAS]) {
-  const name = manifest2.plugin.name;
-  const declared = aliases.length === 0 ? [DEFAULT_ALIAS] : aliases;
-  const methods = Object.entries(manifest2.methods);
-  const ordered = [...methods].sort(([left], [right]) => Number(!left.endsWith(":*")) - Number(!right.endsWith(":*")));
-  const rules = [];
-  const push = (rule) => {
-    const existing = rules.findIndex((held) => held.action === rule.action && held.resource === rule.resource);
-    if (existing !== -1) rules.splice(existing, 1);
-    rules.push(rule);
-  };
-  for (const [method, item2] of ordered) {
-    const effect = effectFor(item2, level);
-    if (isMcpMethod(method)) {
-      const tool = method.slice("mcp:".length);
-      for (const alias of declared) {
-        const server = serverOf(name, alias, declared);
-        if (!server.ok) throw new Error(`access: ${server.problems.join("; ")}`);
-        push({ action: toolAction(server.value, tool), resource: "*", effect });
-      }
-      continue;
-    }
-    push({ action: methodAction(name, method), resource: "*", effect });
-  }
-  return rules;
-}
-function evaluate(rules, action2, resource = "*") {
-  return rules.findLast((rule) => wildcard(rule.action, action2) && wildcard(rule.resource, resource))?.effect ?? "ask";
-}
-function matches(pattern, value) {
-  return wildcard(pattern, value);
-}
-var wildcard = (pattern, value) => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`).test(value);
-function sameRule(held, rule) {
-  return held.action === rule.action && held.resource === rule.resource && held.effect === rule.effect;
-}
-function withRules(permissions, additions) {
-  const missing = additions.filter((addition) => !permissions.some((held) => sameRule(held, addition)));
-  if (missing.length === 0) return [...permissions];
-  const base = permissions.findIndex((rule) => rule.action === "*" && rule.resource === "*" && rule.effect === "allow");
-  const at = base + 1;
-  return [...permissions.slice(0, at), ...missing, ...permissions.slice(at)];
-}
-var rank = (effect) => effect === "allow" ? 2 : effect === "ask" ? 1 : 0;
-var concrete = (action2) => action2.replaceAll("*", "x").replaceAll("?", "x");
-function overridden(agent, rule) {
-  const index = agent.permissions.findIndex((held) => sameRule(held, rule));
-  if (index === -1) return true;
-  const action2 = concrete(rule.action);
-  if (rank(evaluate(agent.permissions, action2, rule.resource)) > rank(rule.effect)) return true;
-  for (const later of agent.permissions.slice(index + 1)) {
-    if (rank(later.effect) <= rank(rule.effect)) continue;
-    if (later.resource === "*") continue;
-    if (matches(later.action, action2) || matches(rule.action, concrete(later.action))) return true;
-  }
-  return false;
-}
-function unguardedAgents(agents, rules) {
-  return agents.filter((agent) => rules.some((rule) => overridden(agent, rule))).map((agent) => agent.id).sort();
-}
-function aliasesOf(manifest2, options) {
-  if (manifest2.accounts === void 0) return { ok: true, value: ["default"] };
-  const plan = accountsOf(manifest2, options);
-  if (!plan.ok) return plan;
-  const aliases = plan.value.accounts.map((account) => account.alias);
-  return { ok: true, value: aliases.length === 0 ? aliasesFrom(options) : aliases };
-}
-async function applyAccess(context, request) {
-  const options = request.options ?? {};
-  const level = accessLevel(options);
-  const aliases = aliasesOf(request.manifest, options);
-  const problems = [];
-  if (!level.ok) problems.push(...level.problems.map((problem) => `OPTIONS_INVALID: ${problem}. Next step: set access to all, ask-changes or read-only.`));
-  if (!aliases.ok) problems.push(...aliases.problems.map((problem) => `OPTIONS_INVALID: ${problem}. Next step: fix the accounts option.`));
-  if (!level.ok || !aliases.ok) {
-    return { level: "all", aliases: ["default"], rules: [], problems, dispose: async () => {
-    } };
-  }
-  const rules = rulesFor(request.manifest, level.value, aliases.value);
-  let registration;
-  try {
-    registration = await context.agent.transform((editor) => {
-      for (const agent of editor.list()) {
-        const updated = withRules(agent.permissions, rules);
-        if (updated.length !== agent.permissions.length) editor.update(agent.id, (target) => void (target.permissions = updated));
-      }
-    });
-  } catch (error2) {
-    problems.push(`UNAVAILABLE: the access rules could not be added to the agents: ${error2 instanceof Error ? error2.message : String(error2)}. Next step: check the agent configuration and reload the plugin.`);
-  }
-  return {
-    level: level.value,
-    aliases: aliases.value,
-    rules,
-    problems,
-    async dispose() {
-      await registration?.dispose().catch(() => void 0);
-    }
-  };
 }
 
 // node_modules/@we-the-rebel-alliance/plugin-contract/dist/register.js
@@ -12951,6 +12951,37 @@ function ownerOf(identity) {
     ]
   };
 }
+async function statusOf(context, unguardedAgents2, signal) {
+  const signals = {};
+  for (const profile of context.profiles) {
+    try {
+      const identity = await context.provider.identity(profile.alias, signal);
+      signals[profile.alias] = { state: "ready", owner: ownerOf(identity) };
+    } catch (error2) {
+      if (error2 instanceof SourceError && error2.code === "NEEDS_SIGN_IN") signals[profile.alias] = { state: "needs_sign_in" };
+      else signals[profile.alias] = { state: "error", reason: redactReason(error2 instanceof Error ? error2.message : String(error2)) };
+    }
+  }
+  return statusAnswer({
+    manifest: context.manifest,
+    version: context.version,
+    hostVersion: context.hostVersion,
+    accounts: accountStatuses(context.profiles, signals),
+    problems: [...context.problems],
+    unguardedAgents: unguardedAgents2
+  });
+}
+function statusText(answer) {
+  const lines = [`Slack ${answer.version} on OpenCode ${answer.host.version}: ${answer.state}.`];
+  for (const account of answer.accounts) {
+    const owner = account.owner === void 0 ? "" : ` (${account.owner.label})`;
+    const reason = account.reason === void 0 ? "" : ` \u2014 ${account.reason}`;
+    lines.push(`- ${account.alias}: ${account.state}${owner}${reason}`);
+  }
+  if (answer.unguardedAgents.length > 0) lines.push(`Agents without the generated rules: ${answer.unguardedAgents.join(", ")}.`);
+  if (answer.nextStep !== null) lines.push(`Next step: ${answer.nextStep}`);
+  return lines.join("\n");
+}
 var EMPTY_INPUT = { type: "object", properties: {}, additionalProperties: false };
 function statusHandler(context) {
   return {
@@ -12958,25 +12989,7 @@ function statusHandler(context) {
     input: EMPTY_INPUT,
     output: STATUS_SCHEMA,
     async run(_input, call) {
-      const signals = {};
-      for (const profile of context.profiles) {
-        try {
-          const identity = await context.provider.identity(profile.alias, call.signal);
-          signals[profile.alias] = { state: "ready", owner: ownerOf(identity) };
-        } catch (error2) {
-          if (error2 instanceof SourceError && error2.code === "NEEDS_SIGN_IN") signals[profile.alias] = { state: "needs_sign_in" };
-          else signals[profile.alias] = { state: "error", reason: redactReason(error2 instanceof Error ? error2.message : String(error2)) };
-        }
-      }
-      const problems = [...context.problems];
-      return statusAnswer({
-        manifest: context.manifest,
-        version: context.version,
-        hostVersion: context.hostVersion,
-        accounts: accountStatuses(context.profiles, signals),
-        problems,
-        unguardedAgents: await call.unguardedAgents()
-      });
+      return statusOf(context, await call.unguardedAgents(), call.signal);
     }
   };
 }
@@ -13319,12 +13332,67 @@ function createSlackProvider(ctx) {
   };
 }
 
+// src/skills.ts
+import { readdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { Skill } from "@opencode/plugin";
+var ROOT = new URL("../skills/", import.meta.url);
+var FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
+var ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+var DESCRIPTION_MAX = 300;
+function invalid2(id, what) {
+  return new Error(`SKILLS_INVALID: the bundled skill "${id}" ${what}. Next step: reinstall the plugin from its release tag, then reload OpenCode.`);
+}
+function parseSkill(id, path, text4) {
+  const match = FRONTMATTER.exec(text4);
+  if (match === null) return void 0;
+  const fields = /* @__PURE__ */ new Map();
+  for (const line of match[1].split(/\r?\n/)) {
+    const field = /^([a-z]+):\s*(.*?)\s*$/.exec(line);
+    if (field !== null) fields.set(field[1], field[2].replace(/^(["'])(.*)\1$/, "$2"));
+  }
+  const name = fields.get("name");
+  const description = fields.get("description");
+  const content = match[2].trim();
+  if (name !== id || description === void 0 || description === "" || description.length > DESCRIPTION_MAX || content === "") return void 0;
+  return {
+    id: Skill.ID.make(id),
+    name: Skill.Name.make(id),
+    description,
+    path: Skill.Info.fields.path.make(path),
+    content
+  };
+}
+async function loadSkills(root = ROOT) {
+  const entries = await readdir(root, { withFileTypes: true });
+  const ids = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  if (ids.length === 0) throw invalid2("skills", "has no directory");
+  const skills = [];
+  for (const id of ids) {
+    if (!ID.test(id)) throw invalid2(id, "has a directory name that is not a skill id");
+    const path = fileURLToPath(new URL(`${id}/SKILL.md`, root));
+    const text4 = await readFile(path, "utf8").catch(() => void 0);
+    if (text4 === void 0) throw invalid2(id, "has no SKILL.md");
+    const skill = parseSkill(id, path, text4);
+    if (skill === void 0) throw invalid2(id, `needs frontmatter with name "${id}", a non-empty description of at most ${DESCRIPTION_MAX} characters, and non-empty content`);
+    skills.push(skill);
+  }
+  return skills;
+}
+async function registerSkills(skill) {
+  const skills = await loadSkills();
+  await skill.transform((editor) => {
+    for (const entry of skills) editor.add(entry);
+  });
+}
+
 // src/index.ts
 var index_default = Plugin.define({
   id: manifest.plugin.name,
   async setup(ctx) {
     assertHost(ctx, manifest);
     const options = readOptions(ctx.options);
+    await registerSkills(ctx.skill);
     await registerAppIntegration(ctx.integration);
     const client = await resolveClient(ctx.integration, options);
     const accounts = await registerSlackAccounts(ctx, manifest, options, client);
@@ -13332,7 +13400,11 @@ var index_default = Plugin.define({
     if (!plan.ok) {
       throw new Error(`OPTIONS_INVALID: ${plan.problems.join("; ")}. Next step: fix the plugin's accounts option.`);
     }
-    const handlers = createHandlers({
+    const level = accessLevel(ctx.options);
+    if (!level.ok) {
+      throw new Error(`OPTIONS_INVALID: ${level.problems.join("; ")}. Next step: set access to all, ask-changes or read-only.`);
+    }
+    const context = {
       manifest,
       profiles: plan.value.accounts,
       options,
@@ -13340,9 +13412,28 @@ var index_default = Plugin.define({
       version: version2,
       hostVersion: ctx.app.version,
       problems: [...accounts.problems]
+    };
+    const registration = await register(ctx, manifest, createHandlers(context));
+    const aliases = plan.value.accounts.map((account) => account.alias);
+    const command = await ctx.command.transform((editor) => {
+      editor.add({
+        name: "slack",
+        description: "Show the Slack plugin's status, accounts and next step",
+        async execute({ sessionID, delivery }) {
+          let unguarded;
+          try {
+            unguarded = { ok: true, agents: unguardedAgents((await ctx.agent.list()).data, rulesFor(manifest, level.value, aliases)) };
+          } catch (error2) {
+            unguarded = { ok: false, error: redactReason(error2 instanceof Error ? error2.message : String(error2)) };
+          }
+          await ctx.session.synthetic({ sessionID, delivery, text: statusText(await statusOf(context, unguarded)), description: "Slack status", resume: false });
+        }
+      });
     });
-    const registration = await register(ctx, manifest, handlers);
-    return () => registration.dispose();
+    return async () => {
+      await command.dispose().catch(() => void 0);
+      await registration.dispose();
+    };
   }
 });
 export {
