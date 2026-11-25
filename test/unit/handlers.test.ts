@@ -172,6 +172,36 @@ test("mentions_list refuses a cursor from another account", async () => {
   await assert.rejects(() => run("mentions_list", { source: "mentions", since: SINCE, cursor: work.cursor }, "personal"), /CURSOR_INVALID:/)
 })
 
+test("mentions_list never skips a same-timestamp mention across a page boundary", async () => {
+  // Two mentions at one ts in different conversations: the external id is `<channel>:<ts>`, so the pair (ts, id) is the
+  // total order. With a bare ts the second is treated as already read and the next page is empty.
+  const tie = "1795082400.000100"
+  const mention = (channel: string, text: string) => ({
+    channel_id: channel,
+    message_ts: tie,
+    author_user_id: "U0AAKAI001",
+    author_name: "Kai Mensah",
+    content: text,
+    permalink: `https://acme.slack.com/archives/${channel}/p1795082400000100`,
+  })
+  const provider = withProvider({
+    search: async () => ({ messages: [mention("C0AAWORK01", "first mention at one ts"), mention("D0AAKAI001", "second mention at one ts")] }),
+  })
+  const table = handlersWith(provider)
+  const read = (input: Readonly<Record<string, unknown>>) =>
+    table["mentions_list"]!.run({ source: "mentions", since: "2026-11-19T00:00:00Z", limit: 1, ...input }, callFor("work")) as Promise<{
+      events: { external_id: string; occurred_at: string }[]
+      cursor: string
+    }>
+  const first = await read({})
+  assert.deepEqual(first.events.map((event) => event.external_id), ["C0AAWORK01:1795082400.000100"])
+  const second = await read({ cursor: first.cursor })
+  assert.deepEqual(second.events.map((event) => event.external_id), ["D0AAKAI001:1795082400.000100"])
+  assert.equal(second.events[0]!.occurred_at, first.events[0]!.occurred_at)
+  const third = await read({ cursor: second.cursor })
+  assert.deepEqual(third.events, [])
+})
+
 test("mark_read writes, then nudges the workspace capability", async () => {
   const provider = createFakeProvider()
   const { bus, emitted } = recordingBus()

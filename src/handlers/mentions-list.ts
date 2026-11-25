@@ -99,15 +99,19 @@ export function mentionsListHandler(context: HandlerContext): MethodHandler {
       }
       const identity = await context.provider.identity(call.account, call.signal)
       const binding = bindingOf(MENTIONS_SOURCE, call.account, undefined)
-      let bound = BigInt(startTime(request, Date.now())) * 1000n - 1n
+      // The position is a total order: the ts, and at one ts the external id. Two mentions can share a ts, and a bare
+      // ts would let the later one be treated as already read and never listed.
+      let bound: { readonly at: bigint; readonly id?: string } = { at: BigInt(startTime(request, Date.now())) * 1000n - 1n }
       if (request.cursor !== undefined) {
         const decoded = decodeBoundCursor(binding, request.cursor)
         const at = decoded.ok ? decoded.state["t"] : undefined
-        if (typeof at !== "string" || !TS.test(at)) {
+        const id = decoded.ok ? decoded.state["id"] : undefined
+        if (typeof at !== "string" || !TS.test(at) || (id !== undefined && typeof id !== "string")) {
           throw failure("CURSOR_INVALID", "the cursor was not issued by mentions_list for this Slack account", "Read again without a cursor, with since, to start again.")
         }
-        bound = micros(at)
+        bound = { at: micros(at), ...(id === undefined ? {} : { id }) }
       }
+      const afterBound = (at: bigint, id: string) => at > bound.at || (at === bound.at && (bound.id === undefined || id > bound.id))
       const found = new Map<string, { at: bigint; event: SourceEvent }>()
       let next: string | undefined
       let complete = false
@@ -120,7 +124,7 @@ export function mentionsListHandler(context: HandlerContext): MethodHandler {
             content_types: "messages",
             sort: "timestamp",
             sort_dir: "desc",
-            after: String(bound / 1_000_000n - 1n),
+            after: String(bound.at / 1_000_000n - 1n),
             limit: String(SEARCH_PAGE),
             ...(next === undefined ? {} : { cursor: next }),
           },
@@ -130,8 +134,10 @@ export function mentionsListHandler(context: HandlerContext): MethodHandler {
         for (const item of answer.messages) {
           const mention = mentionEvent(call.account, identity.userId, item)
           if (mention === undefined) continue
-          if (mention.at <= bound) older = true
-          else found.set(mention.event.external_id, mention)
+          // Only a strictly older ts proves the search has passed the window: a same-ts item may come before or after
+          // the cursor's own id in the page, so it is filtered by the pair and never stops the page.
+          if (mention.at < bound.at) older = true
+          else if (afterBound(mention.at, mention.event.external_id)) found.set(mention.event.external_id, mention)
         }
         next = answer.next
         if (next === undefined || older) {
@@ -148,17 +154,17 @@ export function mentionsListHandler(context: HandlerContext): MethodHandler {
       const fits = fitPage(screened.events, request.limit, MAX_BYTES)
       const events: SourceEvent[] = []
       const refused: RefusedEvent[] = []
-      let last = bound
+      let last: { readonly at: bigint; readonly id?: string } = bound
       let consumed = 0
       for (const item of listed) {
         const drop = refusedById.get(item.event.external_id)
         if (drop === undefined && events.length === fits) break
         if (drop === undefined) events.push(item.event)
         else refused.push(drop)
-        last = item.at
+        last = { at: item.at, id: item.event.external_id }
         consumed++
       }
-      const cursor = encodeBoundCursor(binding, { t: tsOf(last) })
+      const cursor = encodeBoundCursor(binding, { t: tsOf(last.at), ...(last.id === undefined ? {} : { id: last.id }) })
       const extras: PageExtras = { plugin: PLUGIN_PACKAGE, asOf: context.provider.asOf(), ...(refused.length === 0 ? {} : { refused }) }
       return eventsListResult({ source: MENTIONS_SOURCE, account: call.account, owner: { id: `slack:${identity.userId}`, label: identity.userName ?? identity.userId } }, events, cursor, consumed < listed.length, extras)
     },
