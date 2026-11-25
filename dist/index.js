@@ -13354,7 +13354,7 @@ function parseSkill(id, path, text4) {
   const name = fields.get("name");
   const description = fields.get("description");
   const content = match[2].trim();
-  if (name !== id || description === void 0 || description === "" || description.length > DESCRIPTION_MAX || content === "") return void 0;
+  if (name !== id || description === void 0 || description === "" || description === ">" || description === "|" || description.length > DESCRIPTION_MAX || content === "") return void 0;
   return {
     id: Skill.ID.make(id),
     name: Skill.Name.make(id),

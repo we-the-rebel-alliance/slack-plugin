@@ -36,7 +36,7 @@ export function parseSkill(id: string, path: string, text: string): SkillInfo | 
   const name = fields.get("name")
   const description = fields.get("description")
   const content = match[2]!.trim()
-  if (name !== id || description === undefined || description === "" || description.length > DESCRIPTION_MAX || content === "") return undefined
+  if (name !== id || description === undefined || description === "" || description === ">" || description === "|" || description.length > DESCRIPTION_MAX || content === "") return undefined
   return {
     id: Skill.ID.make(id),
     name: Skill.Name.make(id),

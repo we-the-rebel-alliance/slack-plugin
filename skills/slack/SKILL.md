@@ -1,6 +1,6 @@
 ---
 name: slack
-description: Use when a task needs Slack through this plugin: choosing the account alias, the access level and what each refusal means, and which Slack read or write to reach for. Start here; slack-search covers finding and reading content.
+description: "Use when a task needs Slack through this plugin: choosing the account alias, the access level and what each refusal means, and which Slack read or write to reach for. Start here; slack-search covers finding and reading content."
 ---
 
 # Slack

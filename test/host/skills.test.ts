@@ -5,18 +5,31 @@
  * This test loads the built entry in the real `@opencode/sdk` host, activates it, and reads the host's skill list.
  */
 import assert from "node:assert/strict"
-import { mkdtempSync, readdirSync, rmSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import type { Plugin } from "@opencode/plugin"
 import { OpenCode } from "@opencode/sdk"
+import { parse } from "yaml"
 
 const SKILLS = readdirSync(new URL("../../skills/", import.meta.url), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort()
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** The description in a SKILL.md, parsed as YAML, checked to be real text and not a block-scalar marker. */
+function expectedDescription(id: string): string {
+  const text = readFileSync(new URL(`../../skills/${id}/SKILL.md`, import.meta.url), "utf8")
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1]
+  assert.ok(frontmatter !== undefined, `${id}: no frontmatter`)
+  const parsed = parse(frontmatter) as { description?: unknown }
+  assert.equal(typeof parsed.description, "string", `${id}: description is not a string`)
+  const description = String(parsed.description)
+  assert.ok(description.trim() !== "" && description !== ">" && description !== "|", `${id}: description is empty or a block scalar`)
+  return description
+}
 
 test("the plugin registers every shipped skill on the real 2.4.1 host", { timeout: 120_000 }, async () => {
   // The session's project is an empty directory, so the host cannot discover the package's `skills/` by itself: what
@@ -32,13 +45,17 @@ test("the plugin registers every shipped skill on the real 2.4.1 host", { timeou
   try {
     const session = await host.sessions.create({ location: { directory: project }, agent: "build", permissions: [] })
     await host.sessions.prompt({ sessionID: session.id, text: "activate the skill test", delivery: "queue" }).catch(() => undefined)
-    let seen: string[] = []
+    let listed: { readonly id: string; readonly description?: string }[] = []
     for (const deadline = Date.now() + 60_000; Date.now() < deadline; ) {
-      seen = (await host.skill.list({ location: { directory: project } })).data.map((skill: { readonly id: string }) => skill.id)
-      if (SKILLS.every((id) => seen.includes(id))) break
+      listed = (await host.skill.list({ location: { directory: project } })).data.map((skill: { readonly id: string; readonly description?: string }) => ({
+        id: skill.id,
+        ...(typeof skill.description === "string" ? { description: skill.description } : {}),
+      }))
+      if (SKILLS.every((id) => listed.some((skill) => skill.id === id))) break
       await sleep(250)
     }
-    assert.deepEqual(SKILLS.filter((id) => !seen.includes(id)), [], `skills missing from the host: ${seen.join(", ")}`)
+    assert.deepEqual(SKILLS.filter((id) => !listed.some((skill) => skill.id === id)), [], `skills missing from the host: ${listed.map((skill) => skill.id).join(", ")}`)
+    for (const id of SKILLS) assert.equal(listed.find((skill) => skill.id === id)?.description, expectedDescription(id), `${id}: the registered description differs from its SKILL.md`)
 
     const location = { directory: project }
     const commands = (await host.command.list({ location })).data.map((command: { readonly name: string }) => command.name)

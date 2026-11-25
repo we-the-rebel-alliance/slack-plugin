@@ -1,6 +1,6 @@
 ---
 name: slack-search
-description: The Slack search and read workflow: choose a search tool, read a channel or thread, follow a permalink, and consume the workspace or mentions feed with a cursor. For accounts, access levels and errors, read the slack skill.
+description: "The Slack search and read workflow: choose a search tool, read a channel or thread, follow a permalink, and consume the workspace or mentions feed with a cursor. For accounts, access levels and errors, read the slack skill."
 ---
 
 # Slack search and read
