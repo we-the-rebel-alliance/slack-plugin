@@ -1,22 +1,31 @@
 # Changelog
 
-## 0.0.0 (unreleased)
+## 0.0.0 (2026-11-25)
 
-The plugin restarts at `0.0.0` as `@we-the-rebel-alliance/slack-plugin`, after the move to
-`we-the-rebel-alliance/slack-plugin`.
+The first release on plugin-contract v0.
 
-- **OpenCode 2.4.1 only.** The host range is `>=2.4.1 <2.5.0` and the checks run on 2.4.1 alone; the test
-  matrices and code paths for older hosts are gone, while recorded fixtures keep the host they were captured on. The dev dependencies are the 2.4.1 packages, with `effect` 4.1.0 as `@opencode/plugin`'s peer.
-- **Two sources.** `slack.workspace` (the messages of the channels a consumer confirms) and `slack.mentions` (the
-  messages that mention you). The `slack.dms` snapshot and its `dms_list` were removed, with the direct and group
-  message scopes only it needed.
-- **No app-specific surface.** The declaration stays as the plugin's declaration, and its app guide and the
-  README/AGENTS sections are gone. The `sources` and `jelly` keys are replaced by the plugin contract's `capabilities`
-  manifest in the next phase.
-- **No contract-1 cursors.** A cursor is read only when `events_list` bound it to this plugin, source, workspace and
-  scope.
-- **Fixed context.** The Code Mode namespace line is the standard's 257-character text and the `slack-search` skill
-  description is 209 characters; nothing is pinned and no hook runs per request. What left the namespace line (access
-  levels, private-content consent, file reads, the tools RPC) is in the skill body.
-- **Docs and CI.** The README, AGENTS.md and docs describe the new name and direction; CI is one `ci` job on Node 24
-  that installs actionlint before the full check.
+- Slack's 27 MCP tools, passed through as `mcp:<tool>` methods and classed read, write, send or share, with one access
+  rule per account alias.
+- The plugin's own reads: `status`, `probe`, `events_list`, `thread_read`, `channels_list` and `mentions_list`; and one
+  write, `mark_read`, which emits `changed` for the workspace source after the write.
+- Accounts through the contract's `accounts` module: one Slack workspace per alias, one MCP server per alias with its
+  own OAuth, and one global Slack-app client-ID integration at `slack-app`. `account` on every method that reads or
+  writes Slack.
+- Two events sources: `slack.workspace`, with a channel scope and a thread detail, and `slack.mentions`. Cursors are
+  bound to the plugin, source, account and scope.
+- One `register` call wires the agent tool, Code Mode, the RPC and the bus; the access rules are generated from `access`
+  and each method's class and effect.
+- Documentation and the `slack-search` skill, and a conformance fixture recorded over the two synthetic workspaces
+  `work` and `personal`, with T0 and T1.
+
+### Removed since v0.0.7
+
+- The TUI status dialog (the `slack.workspace.tui` plugin): the contract's `status` method and the `/slack` command show
+  the same state, so the dialog duplicated a second UI surface. OpenCode 2.4 clients render status from the method; the
+  old dialog's refresh key has no replacement, because the method is read on demand.
+- The `slack.dms` snapshot and `dms_list` (the old 35th method): phase 4a removed the app-only DMs inbox read per plan
+  §5.2, which keeps only the `workspace` and `mentions` sources; `slack.mentions` still searches direct and group
+  messages. The manifest now has 34 methods.
+- The tools RPC's `describe`: contract §18 makes `describe` diagnostics only, and the manifest and catalog are the
+  discovery path. The tools RPC itself is replaced by the contract RPC id `slack` (see the parity table in the pull
+  request).

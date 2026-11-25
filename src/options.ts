@@ -1,190 +1,155 @@
-import { CALLBACK_PORT_EXAMPLE, DEFAULT_REDIRECT_URI, DEFAULT_SCOPES, HOSTED_REDIRECT_EXAMPLE } from "./defaults.js"
-import { CHANNEL_ID, MAX_CHANNELS } from "./events.js"
+/**
+ * The plugin's own options, checked once at setup.
+ *
+ * `access`, `accounts` and `allowUntestedHost` are the contract's: the register applies the first, `accounts` reads
+ * the second and `assertHost` the third. This module reads what only Slack knows: the app's OAuth settings and the
+ * channel ids a read may use when a call names none. A bad value refuses setup with `OPTIONS_INVALID` and a next step.
+ */
+import { DEFAULT_REDIRECT_URI, DEFAULT_SCOPES, MAX_CHANNELS, CHANNEL_ID } from "./defaults.ts"
 
-/** What the default rules allow. `all` is the default; the other two are how a user restricts the plugin. */
-export type Access = "all" | "ask-changes" | "read-only"
-
-const ACCESS_VALUES: readonly Access[] = ["all", "ask-changes", "read-only"]
-
-export interface Options {
-  /** Pins the Slack app, for example in an organisation's managed config. Otherwise the /connect Slack app client ID entry sets it. */
+/** The Slack app every alias signs in with. */
+export interface OAuthOptions {
+  /** The app's client ID; `/connect`'s "Slack app client ID" entry sets it otherwise. */
   readonly clientId?: string
-  readonly redirectUri: string
-  /** The local port OpenCode's callback listener uses. Set only, and always, with an `https:` redirect. */
-  readonly callbackPort?: number
-  readonly scopes: readonly string[]
+  /** Only for an app without PKCE. */
   readonly clientSecret?: string
-  /**
-   * The OAuth authorization server metadata document OpenCode reads instead of discovering Slack's, passed to the MCP
-   * server's `oauth` block unchanged. Its `token_endpoint` receives every token exchange and refresh.
-   */
+  readonly redirectUri: string
+  /** The local port a proxy forwards an `https:` redirect to. */
+  readonly callbackPort?: number
+  /** The user scopes a sign-in asks for unless the alias's profile lists its own. */
+  readonly scopes: readonly string[]
+  /** An authorization-server metadata document to read instead of Slack's. */
   readonly authServerMetadataUrl?: string
-  readonly allowUntestedHost: boolean
-  /** What the generated default rules allow: everything, changes ask, or read-only. */
-  readonly access: Access
-  /** The channel and direct message ids `slack_events_list` reads, in order; none by default. */
+}
+
+/** The options the plugin reads itself. */
+export interface SlackOptions {
+  readonly oauth: OAuthOptions
+  /** The channel and direct-message ids a read uses when its call names none. */
   readonly channels: readonly string[]
 }
 
-/** A rejected option. Messages name the field and never echo its value. */
-export interface OptionsError {
-  readonly code: "OPTIONS_INVALID"
-  readonly field: string
-  readonly message: string
-  readonly next: string
+const NO_SPACES = /^\S+$/
+const SCOPE = /^[a-z][a-z0-9:._-]{0,63}$/
+/** Longer than any metadata address a host serves, and short enough to refuse a pasted document. */
+const MAX_METADATA_URL_LENGTH = 2048
+const TOP_KEYS = ["oauth", "allowUntestedHost", "access", "accounts", "events"]
+const OAUTH_KEYS = ["client_id", "redirect_uri", "callback_port", "scopes", "client_secret", "auth_server_metadata_url"]
+const EVENTS_KEYS = ["channels"]
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+
+/** A refusal in the contract's form; setup throws it, so a bad option leaves nothing half-registered. */
+function invalid(field: string, message: string, next: string): Error {
+  return new Error(`OPTIONS_INVALID: options.${field} ${message}. Next step: ${next}`)
 }
 
-export type ParsedOptions =
-  | { readonly ok: true; readonly options: Options }
-  | { readonly ok: false; readonly error: OptionsError }
-
-const TOP_KEYS = ["oauth", "allowUntestedHost", "access", "events"]
-const EVENTS_KEYS = ["channels"]
-const OAUTH_KEYS = ["client_id", "redirect_uri", "callback_port", "scopes", "client_secret", "auth_server_metadata_url"]
-/** Longer than any metadata address a host serves, and short enough to refuse a pasted document. */
-export const MAX_METADATA_URL_LENGTH = 2048
-const NO_SPACES = /^\S+$/
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-
-const fail = (field: string, message: string, next: string): ParsedOptions =>
-  ({ ok: false, error: { code: "OPTIONS_INVALID", field, message, next } })
-
 /**
- * A loopback `http:` redirect, where OpenCode listens on the URL's own port, or an `https:` one that a proxy
- * forwards to OpenCode's listener on `oauth.callback_port`. Both need a path, which the listener matches.
+ * A loopback `http:` redirect, where OpenCode listens on the URL's own port, or an `https:` one that a proxy forwards
+ * to OpenCode's listener on `callback_port`. Both need a path, which the listener matches.
  */
 function redirectProblem(value: string): string | undefined {
   let url: URL
   try {
     url = new URL(value)
   } catch {
-    return "Must be a valid URL."
+    return "must be a valid URL"
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return "Must use http: or https:."
-  if (url.protocol === "http:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
-    return "An http: URL must use the host localhost or 127.0.0.1."
-  }
-  if (url.protocol === "http:" && url.port === "") return "An http: URL must include an explicit port."
-  if (url.username !== "" || url.password !== "") return "Must not include credentials."
-  if (value.includes("?") || value.includes("#")) return "Must not include a query or fragment."
-  if (url.pathname === "/") return "Must include a path, such as /callback."
+  if (url.protocol !== "http:" && url.protocol !== "https:") return "must use http: or https:"
+  if (url.protocol === "http:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") return "must use the host localhost or 127.0.0.1 with http:"
+  if (url.protocol === "http:" && url.port === "") return "must include an explicit port with http:"
+  if (url.username !== "" || url.password !== "") return "must not include credentials"
+  if (value.includes("?") || value.includes("#")) return "must not include a query or fragment"
+  if (url.pathname === "/") return "must include a path, such as /callback"
   return undefined
 }
 
 /** An `https:` address with a host, and no user name, password or fragment. The query is the server's own. */
 function metadataUrlProblem(value: string): string | undefined {
-  if (value.length > MAX_METADATA_URL_LENGTH) return `Must be at most ${MAX_METADATA_URL_LENGTH} characters.`
+  if (value.length > MAX_METADATA_URL_LENGTH) return `must be at most ${MAX_METADATA_URL_LENGTH} characters`
   let url: URL
   try {
     url = new URL(value)
   } catch {
-    return "Must be a valid URL."
+    return "must be a valid URL"
   }
-  if (url.protocol !== "https:") return "Must use https:."
-  if (url.username !== "" || url.password !== "") return "Must not include credentials."
-  if (value.includes("#")) return "Must not include a fragment."
+  if (url.protocol !== "https:") return "must use https:"
+  if (url.username !== "" || url.password !== "") return "must not include credentials"
+  if (value.includes("#")) return "must not include a fragment"
   return undefined
 }
 
 const isPort = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65535
 
-export function parseOptions(input: unknown): ParsedOptions {
-  const raw = input ?? {}
-  if (!isRecord(raw)) return fail("options", "Plugin options must be an object.", "Set options to an object, or remove them.")
-  const unknownKey = Object.keys(raw).find((key) => !TOP_KEYS.includes(key))
-  if (unknownKey !== undefined) {
-    return fail(unknownKey, "This option is not supported.", `Remove it. Supported options: ${TOP_KEYS.join(", ")}.`)
-  }
+/** The user scopes a list names, or the problem with it. */
+export function scopeListProblem(value: unknown): string | undefined {
+  if (!Array.isArray(value) || value.length === 0) return "must be a non-empty list of scope names"
+  if (!value.every((scope): scope is string => typeof scope === "string" && NO_SPACES.test(scope) && SCOPE.test(scope))) return "must list Slack user scopes such as channels:read"
+  if (new Set(value).size !== value.length) return "must not list a scope twice"
+  return undefined
+}
 
-  const oauth = raw.oauth ?? {}
-  if (!isRecord(oauth)) return fail("oauth", "Must be an object.", "Set oauth to an object such as { \"client_id\": \"...\" }.")
-  const unknownOAuthKey = Object.keys(oauth).find((key) => !OAUTH_KEYS.includes(key))
-  if (unknownOAuthKey !== undefined) {
-    return fail(`oauth.${unknownOAuthKey}`, "This option is not supported.", `Remove it. Supported oauth options: ${OAUTH_KEYS.join(", ")}.`)
-  }
+/** Read and check the plugin's own options; a problem is an `OPTIONS_INVALID` error with a next step. */
+export function readOptions(raw: unknown): SlackOptions {
+  const options = raw ?? {}
+  if (!isRecord(options)) throw invalid("", "is not an object", "Set the plugin's options to an object, or remove them.")
+  const unknown = Object.keys(options).find((key) => !TOP_KEYS.includes(key))
+  if (unknown !== undefined) throw invalid(unknown, "is not an option this plugin declares", `Remove it. The plugin's options are ${TOP_KEYS.join(", ")}.`)
 
-  const clientId = oauth.client_id
+  const oauth = options["oauth"] ?? {}
+  if (!isRecord(oauth)) throw invalid("oauth", "is not an object", 'Set oauth to an object such as { "client_id": "…" }.')
+  const unknownOAuth = Object.keys(oauth).find((key) => !OAUTH_KEYS.includes(key))
+  if (unknownOAuth !== undefined) throw invalid(`oauth.${unknownOAuth}`, "is not an oauth option", `Remove it. Supported oauth options are ${OAUTH_KEYS.join(", ")}.`)
+
+  const clientId = oauth["client_id"]
   if (clientId !== undefined && (typeof clientId !== "string" || !NO_SPACES.test(clientId))) {
-    return fail("oauth.client_id", "Must be a non-empty string without spaces.", "Copy the client ID from the Basic Information page of your Slack app.")
+    throw invalid("oauth.client_id", "must be a non-empty string without spaces", "Copy the client ID from the Basic Information page of the Slack app.")
   }
-
-  const redirectUri = oauth.redirect_uri ?? DEFAULT_REDIRECT_URI
-  const redirectError = typeof redirectUri === "string" ? redirectProblem(redirectUri) : "Must be a string."
+  const redirectUri = oauth["redirect_uri"] ?? DEFAULT_REDIRECT_URI
+  const redirectError = typeof redirectUri === "string" ? redirectProblem(redirectUri) : "must be a string"
   if (typeof redirectUri !== "string" || redirectError !== undefined) {
-    return fail("oauth.redirect_uri", redirectError ?? "Must be a string.", `Use a URL listed in the app's Redirect URLs, for example ${DEFAULT_REDIRECT_URI} or ${HOSTED_REDIRECT_EXAMPLE}.`)
+    throw invalid("oauth.redirect_uri", redirectError ?? "must be a string", `Use a URL registered on the Slack app, such as ${DEFAULT_REDIRECT_URI}.`)
   }
-
   const hosted = new URL(redirectUri).protocol === "https:"
-  const callbackPort = oauth.callback_port
-  if (callbackPort !== undefined && !isPort(callbackPort)) {
-    return fail("oauth.callback_port", "Must be a whole number from 1 to 65535.", `Set it to the local port that receives the forwarded callback, for example ${CALLBACK_PORT_EXAMPLE}.`)
-  }
-  if (callbackPort !== undefined && !hosted) {
-    return fail("oauth.callback_port", "Applies only to an https: oauth.redirect_uri.", "Remove it: with a loopback oauth.redirect_uri, OpenCode listens on that URL's port.")
-  }
-  if (callbackPort === undefined && hosted) {
-    return fail("oauth.callback_port", "Must be set with an https: oauth.redirect_uri.", `Set it to the local port your proxy forwards the redirect to, for example ${CALLBACK_PORT_EXAMPLE}.`)
-  }
+  const callbackPort = oauth["callback_port"]
+  if (callbackPort !== undefined && !isPort(callbackPort)) throw invalid("oauth.callback_port", "must be a whole number from 1 to 65535", "Set it to the local port that receives the forwarded callback.")
+  if (callbackPort !== undefined && !hosted) throw invalid("oauth.callback_port", "applies only to an https: oauth.redirect_uri", "Remove it: with a loopback redirect, OpenCode listens on that URL's port.")
+  if (callbackPort === undefined && hosted) throw invalid("oauth.callback_port", "must be set with an https: oauth.redirect_uri", "Set it to the local port your proxy forwards the redirect to.")
 
-  const scopes: unknown = oauth.scopes ?? DEFAULT_SCOPES
-  const isScope = (scope: unknown): scope is string => typeof scope === "string" && NO_SPACES.test(scope)
-  if (!Array.isArray(scopes) || scopes.length === 0 || !scopes.every(isScope)) {
-    return fail("oauth.scopes", "Must be a non-empty list of scope names without spaces.", `List Slack user scopes, for example ${JSON.stringify(DEFAULT_SCOPES)}.`)
-  }
-  if (new Set(scopes).size !== scopes.length) return fail("oauth.scopes", "Lists a scope more than once.", "Remove the duplicate scope.")
+  const scopes = oauth["scopes"] ?? DEFAULT_SCOPES
+  const scopesProblem = scopeListProblem(scopes)
+  if (scopesProblem !== undefined) throw invalid("oauth.scopes", scopesProblem, `List Slack user scopes, for example ${JSON.stringify(DEFAULT_SCOPES)}.`)
 
-  const clientSecret = oauth.client_secret
+  const clientSecret = oauth["client_secret"]
   if (clientSecret !== undefined && (typeof clientSecret !== "string" || clientSecret === "")) {
-    return fail("oauth.client_secret", "Must be a non-empty string.", "Set it to {env:SLACK_CLIENT_SECRET} and export that variable, or remove it to use PKCE.")
+    throw invalid("oauth.client_secret", "must be a non-empty string", "Set it to {env:SLACK_CLIENT_SECRET} and export that variable, or remove it to use PKCE.")
   }
-  if (clientSecret !== undefined && clientId === undefined) {
-    return fail("oauth.client_secret", "Needs oauth.client_id.", "Set oauth.client_id to your Slack app's client ID, or remove oauth.client_secret.")
-  }
-
-  const metadataUrl = oauth.auth_server_metadata_url
-  const metadataError = metadataUrl === undefined ? undefined : typeof metadataUrl === "string" ? metadataUrlProblem(metadataUrl) : "Must be a string."
-  if (metadataError !== undefined) {
-    return fail("oauth.auth_server_metadata_url", metadataError, "Set it to the https: address of your host's own sign-in service's OAuth metadata document, or remove it to use Slack's.")
+  const metadataUrl = oauth["auth_server_metadata_url"]
+  const metadataProblem = metadataUrl === undefined ? undefined : typeof metadataUrl === "string" ? metadataUrlProblem(metadataUrl) : "must be a string"
+  if (metadataProblem !== undefined) {
+    throw invalid("oauth.auth_server_metadata_url", metadataProblem, "Set it to the https: address of your host's own OAuth metadata document, or remove it to use Slack's.")
   }
 
-  const allowUntestedHost = raw.allowUntestedHost ?? false
-  if (typeof allowUntestedHost !== "boolean") {
-    return fail("allowUntestedHost", "Must be true or false.", "Set it to true only to run on an OpenCode version outside the supported range.")
-  }
-
-  const access = raw.access ?? "all"
-  if (typeof access !== "string" || !(ACCESS_VALUES as readonly string[]).includes(access)) {
-    return fail("access", 'Must be "all", "ask-changes" or "read-only".', 'Set access to "all" (the default), "ask-changes" or "read-only".')
-  }
-  const events = raw.events ?? {}
-  if (!isRecord(events)) return fail("events", "Must be an object.", 'Set events to an object such as { "channels": ["C…"] }.')
-  const unknownEventsKey = Object.keys(events).find((key) => !EVENTS_KEYS.includes(key))
-  if (unknownEventsKey !== undefined) {
-    return fail(`events.${unknownEventsKey}`, "This option is not supported.", `Remove it. Supported events options: ${EVENTS_KEYS.join(", ")}.`)
-  }
-  const channels: unknown = events.channels ?? []
+  const events = options["events"] ?? {}
+  if (!isRecord(events)) throw invalid("events", "is not an object", 'Set events to an object such as { "channels": ["C…"] }.')
+  const unknownEvents = Object.keys(events).find((key) => !EVENTS_KEYS.includes(key))
+  if (unknownEvents !== undefined) throw invalid(`events.${unknownEvents}`, "is not an events option", `Remove it. Supported events options are ${EVENTS_KEYS.join(", ")}.`)
+  const channels = events["channels"] ?? []
   if (!Array.isArray(channels) || !channels.every((id) => typeof id === "string" && CHANNEL_ID.test(id))) {
-    return fail("events.channels", "Must be a list of Slack conversation or user ids, such as C0123ABCD45.", "List the ids of the channels and direct messages to collect: a channel's id is at the bottom of its details in Slack.")
+    throw invalid("events.channels", "must be a list of channel and direct-message ids", "List ids such as C0123ABCD45, or leave the option out and pass scope.channels with each read.")
   }
-  if (new Set(channels).size !== channels.length) return fail("events.channels", "Lists a channel more than once.", "Remove the duplicate id.")
-  if (channels.length > MAX_CHANNELS) {
-    return fail("events.channels", `Lists more than ${MAX_CHANNELS} channels.`, `Keep the ${MAX_CHANNELS} channels and direct messages that matter most.`)
-  }
+  if (new Set(channels).size !== channels.length) throw invalid("events.channels", "lists an id twice", "Remove the duplicate id.")
+  if (channels.length > MAX_CHANNELS) throw invalid("events.channels", `lists more than ${MAX_CHANNELS} ids`, `Keep the ${MAX_CHANNELS} channels and direct messages that matter most.`)
 
   return {
-    ok: true,
-    options: {
+    oauth: {
       ...(clientId === undefined ? {} : { clientId }),
       redirectUri,
       ...(callbackPort === undefined ? {} : { callbackPort }),
-      scopes: [...scopes],
+      scopes: [...(scopes as readonly string[])],
       ...(clientSecret === undefined ? {} : { clientSecret }),
       ...(metadataUrl === undefined ? {} : { authServerMetadataUrl: metadataUrl as string }),
-      allowUntestedHost,
-      access: access as Access,
-      channels: [...channels] as string[],
     },
+    channels: [...(channels as readonly string[])],
   }
 }

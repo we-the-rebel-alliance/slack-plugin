@@ -1,13 +1,15 @@
-#!/usr/bin/env node
-// The workflows are parsed as workflows, not as YAML: `actionlint` catches a `${{ }}` that only exists in one context,
-// which makes GitHub reject the whole file and run nothing. CI installs it before the check, so it is on PATH there;
-// elsewhere it runs when it is on PATH and prints a visible notice when it is not.
+// Lints .github/workflows with actionlint when it is on PATH.
+//
+// A clean clone installs no actionlint (it is not an npm package), so this stage says so and passes; CI installs
+// actionlint 1.7.12 from its release with the published checksum, so every workflow is linted there. A binary that is
+// present but refuses the workflows fails this stage.
 import { spawnSync } from "node:child_process"
 
-const probe = spawnSync("actionlint", ["-version"], { encoding: "utf8" })
-if (probe.error?.code === "ENOENT") {
-  console.log("actionlint is not on PATH, so the workflow check is skipped here; CI installs it before the check.")
+const probe = spawnSync("actionlint", ["--version"], { stdio: "ignore" })
+if (probe.error !== undefined) {
+  if (probe.error.code !== "ENOENT") throw probe.error
+  console.log("actionlint: not on PATH; CI installs actionlint 1.7.12 and lints every workflow there")
   process.exit(0)
 }
-const run = spawnSync("actionlint", ["-color"], { stdio: "inherit" })
-process.exit(run.status ?? 1)
+const lint = spawnSync("actionlint", ["-color"], { stdio: "inherit" })
+process.exit(lint.status ?? 1)

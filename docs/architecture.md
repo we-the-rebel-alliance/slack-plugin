@@ -1,66 +1,61 @@
 # Architecture
 
-The plugin is configuration and status code around Slack's hosted MCP server. OpenCode does the rest: the MCP connection, OAuth with PKCE, token storage and refresh, Code Mode and permission prompts.
+## Layers
 
-## Parts
+| Layer | Where | Does |
+|---|---|---|
+| Entry | `src/index.ts` | One `register` call: gate the host, read the options, register the accounts, hand over the handler table. |
+| Manifest | `package.json` `capabilities` | Every method, source and event. `src/manifest.ts` reads it from the installed package. |
+| Accounts | `src/accounts.ts` | The global Slack-app sign-in, one MCP server per alias, the alias's scopes and redirect. |
+| Provider | `src/provider/` | The two endpoints, the MCP tool call and the Web API call. |
+| Handlers | `src/handlers/` | One file per method, every provider call behind `SlackProvider`, and Slack's two answer shapes parsed into contract events. |
+| Skills | `skills/slack/`, `skills/slack-search/` | The main skill (accounts, access, errors) and the search/read workflow. |
 
-| Part | Entry | Job |
-| --- | --- | --- |
-| Server | `src/index.ts` (`slack.workspace`) | Reads the options, resolves the Slack app client, registers the MCP server, the default permission rules, the skill, `/slack-status`, the status RPC and the tools RPC. |
-| TUI | `src/tui.tsx` (`slack.workspace.tui`) | The palette command **Slack: Status** and `/slack`, which open one dialog that renders the status RPC. |
-| RPC contract | `src/rpc.ts` (`slack.workspace`) | The JSON Schema contract of the `status` method. Inlined into both bundles: the server registers it and the TUI calls it. `exports` lists only `.` and `./tui`. |
-| Tools RPC | `src/host/tools-rpc.ts` (`slack.workspace.tools`) | `describe`, one method per known tool, and the owned methods `events_list`, `probe`, `thread_read`, `channels_list`, `mentions_list`, `mark_read` and `status`, so a script can call them with no model ([Scripting](scripting.md)). The transport is the source contract's `tools-rpc` module; this file is Slack's part, one `ToolsRpcPlugin` value. Inlined into `dist/index.js`. |
-| Sources | `package.json` `sources`, `src/events.ts`, `src/source.ts`, `src/mentions.ts` | `slack.workspace` (`slack_events_list`, `probe`, the detail read `thread_read` and the consent list `channels_list`) and `slack.mentions` (`mentions_list`, over the Web API), on the contract's `events` and `cursor` modules. `test/support/conformance.ts` runs the contract's kit over them in `npm run check`. |
+`src/index.ts` never adds a tool, an RPC method or a permission rule. `register` reads the manifest and the handler table,
+and wires the agent tool, Code Mode, the RPC and the bus from them. The access rules are generated from `access` and each
+method's class and effect; nothing is hand-written.
 
-## Build
+## The provider
 
-`scripts/build.ts` bundles `src/index.ts` into `dist/index.js` and `src/tui.tsx` into `dist/tui.js` with esbuild. The TUI source first goes through Babel's Solid universal transform for `@opentui/solid`. Each bundle is self-contained: shared modules are inlined, and only `@opencode/plugin`, `@opentui/*`, `solid-js` and `node:*` stay external. The skills are read at runtime from `skills/` next to `dist/`.
+Two ways into Slack, both with the account's own sign-in:
 
-## Modules
+- **The vendor's MCP tools.** `events_list`, `thread_read` and `channels_list` run `slack_read_channel`,
+  `slack_read_thread` and `slack_list_user_channels` through the host's executor for `<server>_<tool>`, with the caller's
+  own context. The person's rules for that tool apply to the inner call, and the plugin never sees the MCP credential.
+- **Slack's Web API.** `probe`, `mentions_list` and `mark_read` call `auth.test`, `assistant.search.context` and
+  `conversations.mark` at `https://slack.com/api/`. They resolve the alias's MCP sign-in through
+  `ctx.integration.connection` — OpenCode refreshes it near expiry — and put the access token in one `Authorization`
+  header. `src/provider/web.ts` is the only module that reads it; it is never returned, stored, logged or put in an
+  error.
 
-- `options.ts`: validates the plugin options. Errors name the field and never echo its value.
-- `connect.ts`: the **Slack app client ID** `/connect` entry (a key method whose key is the client ID), client resolution (options, then `/connect`; no client ships), and the **Slack** display name of the server's own integration.
-- `server.ts`: the MCP server config, registered only when there is a client and the name is free.
-- `permissions.ts` and `tools.ts`: the tool classes, the default rule block inserted after each agent's base allow, and the reads a script may call.
-- `host/tools-rpc.ts`: the tools RPC. See [Tools RPC](#tools-rpc).
-- `status.ts`: the one status model and its rows. `/slack-status`, the RPC and the dialog all render it.
-- `skills.ts`: loads `skills/slack-search/SKILL.md`.
-- `host-version.ts`: the supported range check, and the tested releases.
-- `slack-api.ts`: the one Slack Web API client and the only code that reads the token: it resolves the `slack` server's sign-in through `ctx.integration.connection` and calls `auth.test`, `conversations.mark` or `assistant.search.context`, returning Slack's answer without token-like strings, or Slack's error code.
-- `identity.ts`: the signed-in account for status and the source, from one `auth.test` per credential; a failure is retried after a minute and never surfaces as an error. Status shows the ids; the source's pages also use the name and the workspace's address.
-- `mark-read.ts`: `slack_mark_read` and its tools RPC method `mark_read`: it asserts its own action, then calls `conversations.mark`; `missing_scope` is `SCOPE_MISSING`.
-- `status-method.ts`: the tools RPC's `status` method, the same status model as the status RPC.
-- `events.ts`: `slack_events_list` and its tools RPC method. It parses Slack's answers (JSON, else the labelled Markdown lines), reads each confirmed channel after its cursor `ts`, halves a window too large for one call, screens out secrets, and reads only through the host's executors. The events, the page and the cursor are source-contract's (`events`, `cursor`).
-- `source.ts`: the sources' `probe` (the workspace and owner, and no content), `thread_read` (one listed event's thread, refused outside the confirmed channels) and `channels_list` (the workspace source's consent options).
-- `web-reads.ts`, `mentions.ts`: the `slack.mentions` source, after @domeevans's structured reads: Slack's Web API through `slack-api.ts`, each call asserting `slack.read` on `<workspace>:<method>` first, rate limits waited out at most twice.
+The two endpoints are named once, in `src/provider/endpoints.ts`.
 
-## Runtime flow
+## What is cached
 
-1. Setup parses the options and checks the host version. On invalid options, or a host outside the supported range, it registers only the status surfaces.
-2. Without `oauth.client_id`, it adds **Slack app client ID** to `/connect` and reads the stored client from OpenCode's credential store.
-3. The MCP transform registers `https://mcp.slack.com/mcp` with that client, or nothing when there is none. A tool transform gives the server's Code Mode namespace its description (`NAMESPACE_DESCRIPTION` in `tools.ts`) and adds `slack_events_list` and `slack_mark_read` to it.
-4. When the plugin is set up, the tools RPC registers after the status RPC, for the server `slack`, with `events_list`, `probe`, `thread_read`, `channels_list`, `mentions_list`, `mark_read` and `status` as its owned methods. It is a conflict while `nameInUse` is set.
-5. A background listener handles `credential.updated` and `credential.switched` (the client changed: `ctx.mcp.reload()`) and `integration.updated` (OpenCode re-registered the server's integration: rename it **Slack** again). Setup's cleanup stops it.
+Nothing. There is no plugin-side cache, no polling and no background work: every answer is read at the call, and every
+cursor belongs to the caller. `src/provider/slack.ts` keeps a fake-friendly interface and no mutable state beyond the
+provider context.
 
-The plugin defines two tools. `slack_events_list` reads only through the host's executors. `slack_mark_read`, status's account and the `slack.mentions` source make the plugin's only network requests: the three Web API methods of `SLACK_API_METHODS`, through `slack-api.ts`, the one place the plugin reads the Slack token.
+The one piece of setup state is the registered accounts: at setup the plugin resolves the Slack app's client ID and
+registers one server per alias. A client ID pasted in `/connect` afterwards takes effect on the next OpenCode start,
+which is why status names it as a problem until the servers carry it.
 
-## Tools RPC
+## OpenCode APIs
 
-`slack.workspace.tools` lets a script call every known Slack tool with no model; [Scripting](scripting.md) is the user's view. Its methods are `describe` and one per tool in `KNOWN_TOOLS` (`src/tools.ts`), by exact upstream name and with a tools RPC class: a `read`, `private` or `file` tool is `read`; a write is `send` when it reaches people (`SEND_TOOLS`) and `write` otherwise. It is an allowlist: a tool that Slack adds later is not a method until it is classified, and `describe` lists it as unclassified.
+Only the public plugin context of `@opencode/plugin` 2.4.1:
 
-A call is `{ sessionID, input }`. The module:
+| API | For |
+|---|---|
+| `ctx.app.version` | The host gate (`assertHost`) and status. |
+| `ctx.options` | The plugin's options. |
+| `ctx.integration.transform` | The global `slack-app` client-ID entry. |
+| `ctx.integration.connection` | The alias's sign-in: `active`, `resolve`, `status`. |
+| `ctx.mcp.transform` | One Slack server per alias. |
+| `ctx.tool.list` | The alias's own Slack tool, for the plugin's reads. |
+| `ctx.agent.transform` | Generated by `register`'s `applyAccess`. |
+| `ctx.permission.assert` | Called by `register` for every door. |
+| `ctx.rpc.register` | One registration, id `slack`, carrying the methods and the bus events. |
+| `ctx.command.transform` | The `/slack` status command, which renders the same `statusOf` answer as the method. |
 
-1. looks up the session with `ctx.session.get`, and its agent's rules with `ctx.agent.get` in the session's location (`SESSION_UNKNOWN`, `SESSION_AGENT_REQUIRED`);
-2. refuses the tool when the last rule that matches `slack_<tool>` on `*`, in the agent's rules followed by the session's, is a deny: OpenCode hides such a tool from the model (`PERMISSION_DENIED`);
-3. refuses with `SERVER_CONFLICT` while the user's own server holds the name;
-4. finds the tool's executor in `ctx.tool.list()`, or names the server's connection state (`AUTH_REQUIRED` and so on) or `TOOL_UNAVAILABLE`;
-5. calls `execute(input, { sessionID, agent, messageID, id, signal, progress })` with a new call id. OpenCode's executor checks `slack_<tool>` on `*` itself, with the agent's rules, the session's rules and saved approvals, and sends OpenCode's own credential;
-6. returns `{ output?, text }`: the tool's structured content and its text parts.
-
-While a call runs, its id is live. A `permission.hook("evaluate")` turns an `ask` whose source id is live into a deny, so the script gets `PERMISSION_DENIED` at once and no prompt waits; this is how an inner ask, such as one the tool makes after it starts, is refused instead of left waiting. It changes nothing else; it is the plugin's only permission hook, and the forbidden-API scan allows exactly this one.
-
-A `Tool.Error` with a cause is a permission refusal; one without a cause is Slack's own error (`isError`), which becomes `UPSTREAM_ERROR` with its first line, at most 300 characters, with tokens and URL queries removed. Any other failure is OpenCode's own and passes through.
-
-OpenCode decodes a plain JSON Schema input with Effect, which drops unknown keys of an object that has properties instead of refusing them. So the envelope's schema carries a strict Standard Schema validator as a non-enumerable `~standard` property, which OpenCode prefers. The contract still reads and serialises as plain JSON Schema, and OpenCode answers a bad envelope with `rpc.invalid_input`.
-
-The executor does not run `execute.before` and `execute.after` hooks. Slack has none, so results are unchanged. `ctx.tool.list()` returning callable executors is not documented as an entry point: the host test checks the whole path on the embedded SDK and on stock 2.4.1, against the offline fake server, which serves Slack's own tool schemas (`test/host/slack-catalog.ts`). Code Mode with nobody present runs as an automation's code action on a stock `opencode serve`, which starts the scheduler; the embedded `@opencode/sdk` host never runs one, so there the suite asserts the same rules over the tools RPC.
+The TUI status dialog of v0.0.7 is gone: the contract's `status` method (a tool, Code Mode and RPC) and the `/slack`
+command show the same answer, so a dialog would duplicate a second UI surface.

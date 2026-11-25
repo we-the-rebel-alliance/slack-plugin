@@ -1,67 +1,73 @@
-import { readFile } from "node:fs/promises"
+/**
+ * The plugin's skills, registered with OpenCode at setup.
+ *
+ * `skills/*\/SKILL.md` ships in the package, but OpenCode does not discover a plugin's skill files by itself: a skill
+ * loads only when the plugin adds it through `ctx.skill.transform`. Every skill is validated before one is registered,
+ * so a broken frontmatter fails setup instead of shipping a skill no agent can read.
+ */
+import { readdir, readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
+import type { Plugin } from "@opencode/plugin"
 import { Skill } from "@opencode/plugin"
-import { VERSION } from "./version.js"
 
 type SkillInfo = typeof Skill.Info.Type
 
-const SKILLS = ["slack-search"] as const
-
-/**
- * The one next step for a broken install: reinstall this release's tag. A Git install is removed by its installed spec
- * and added again.
- */
-const REINSTALL = `Reinstall the plugin: run opencode plugin remove github:we-the-rebel-alliance/slack-plugin#v${VERSION}, then opencode plugin add github:we-the-rebel-alliance/slack-plugin#v${VERSION}, then opencode reload.`
-
+const ROOT = new URL("../skills/", import.meta.url)
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/
+/** A skill's directory id: lowercase letters and digits, hyphens between segments. */
+const ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+/** The fixed-context budget: one skill description is at most 300 characters. */
+const DESCRIPTION_MAX = 300
 
-/** Reads `name` and `description` from YAML-style frontmatter, tolerating CRLF line endings. */
+/** A broken package: the skill ships in the tarball but cannot be loaded. */
+function invalid(id: string, what: string): Error {
+  return new Error(`SKILLS_INVALID: the bundled skill "${id}" ${what}. Next step: reinstall the plugin from its release tag, then reload OpenCode.`)
+}
+
+/** The skill in one `SKILL.md`: its id, description and body, or undefined when the frontmatter is not usable. */
 export function parseSkill(id: string, path: string, text: string): SkillInfo | undefined {
   const match = FRONTMATTER.exec(text)
   if (match === null) return undefined
   const fields = new Map<string, string>()
   for (const line of match[1]!.split(/\r?\n/)) {
     const field = /^([a-z]+):\s*(.*?)\s*$/.exec(line)
-    if (field) fields.set(field[1]!, field[2]!.replace(/^(["'])(.*)\1$/, "$2"))
+    if (field !== null) fields.set(field[1]!, field[2]!.replace(/^(["'])(.*)\1$/, "$2"))
   }
+  const name = fields.get("name")
   const description = fields.get("description")
-  if (fields.get("name") !== id || !description) return undefined
+  const content = match[2]!.trim()
+  if (name !== id || description === undefined || description === "" || description.length > DESCRIPTION_MAX || content === "") return undefined
   return {
     id: Skill.ID.make(id),
     name: Skill.Name.make(id),
     description,
     path: Skill.Info.fields.path.make(path),
-    content: match[2]!.trim(),
+    content,
   }
 }
 
-/** Loads the skills shipped in the package's `skills/` folder. A missing skill means a broken install. */
-export async function loadSkills(root = new URL("../skills/", import.meta.url)): Promise<SkillInfo[]> {
+/** Every skill the package ships, from `skills/<id>/SKILL.md`, sorted by id. */
+export async function loadSkills(root = ROOT): Promise<SkillInfo[]> {
+  const entries = await readdir(root, { withFileTypes: true })
+  const ids = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()
+  if (ids.length === 0) throw invalid("skills", "has no directory")
   const skills: SkillInfo[] = []
-  for (const id of SKILLS) {
+  for (const id of ids) {
+    if (!ID.test(id)) throw invalid(id, "has a directory name that is not a skill id")
     const path = fileURLToPath(new URL(`${id}/SKILL.md`, root))
-    const text = await readFile(path, "utf8").catch(() => {
-      throw new Error(`SKILLS_INVALID: Bundled skill ${id} is missing. Next step: ${REINSTALL}`)
-    })
+    const text = await readFile(path, "utf8").catch(() => undefined)
+    if (text === undefined) throw invalid(id, "has no SKILL.md")
     const skill = parseSkill(id, path, text)
-    if (skill === undefined) throw new Error(`SKILLS_INVALID: Bundled skill ${id} has invalid frontmatter. Next step: ${REINSTALL}`)
+    if (skill === undefined) throw invalid(id, `needs frontmatter with name "${id}", a non-empty description of at most ${DESCRIPTION_MAX} characters, and non-empty content`)
     skills.push(skill)
   }
   return skills
 }
 
-/** A skill as OpenCode lists it: its id and the file it was read from. */
-export interface ListedSkill {
-  readonly id: string
-  readonly path: string
-}
-
-/**
- * The listed skills that carry a bundled skill's id but come from another file. OpenCode keeps one skill per id, and a
- * user's or a project's own skill wins, so the bundled one never loads.
- */
-export function shadowedSkills(listed: readonly ListedSkill[], own: readonly ListedSkill[]): ListedSkill[] {
-  return listed
-    .filter((skill) => own.some((bundled) => bundled.id === skill.id && bundled.path !== skill.path))
-    .map((skill) => ({ id: skill.id, path: skill.path }))
+/** Load and register every shipped skill; a broken one fails setup. */
+export async function registerSkills(skill: Pick<Plugin.Context["skill"], "transform">): Promise<void> {
+  const skills = await loadSkills()
+  await skill.transform((editor) => {
+    for (const entry of skills) editor.add(entry)
+  })
 }
