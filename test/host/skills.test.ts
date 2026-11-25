@@ -36,8 +36,22 @@ test("the plugin registers every shipped skill on the real 2.4.1 host", { timeou
   // the list holds is exactly what the plugin registered.
   const project = mkdtempSync(join(tmpdir(), "slack-skills-"))
   const module = (await import(new URL("../../dist/index.js", import.meta.url).href)) as { default: Plugin.Plugin }
+  // The host has no user config: the wrapper supplies the plugin options a person would write, so this empty project
+  // still has the app client ID and the two aliases whose MCP servers the plugin must register.
+  const wrapper: Plugin.Plugin = {
+    id: module.default.id,
+    async setup(context) {
+      const proxy = new Proxy(context, {
+        get(target, property) {
+          if (property === "options") return { oauth: { client_id: "host-test-client" }, accounts: { default: {}, work: {} } }
+          return Reflect.get(target, property)
+        },
+      })
+      return module.default.setup(proxy)
+    },
+  }
   const host = await OpenCode.create({
-    plugins: [module.default],
+    plugins: [wrapper],
     config: { directory: project },
     app: { name: "opencode", version: "2.4.1" },
     log: { level: "error", emit: () => undefined },
@@ -60,6 +74,9 @@ test("the plugin registers every shipped skill on the real 2.4.1 host", { timeou
     const location = { directory: project }
     const commands = (await host.command.list({ location })).data.map((command: { readonly name: string }) => command.name)
     assert.ok(commands.includes("slack"), `commands missing /slack: ${commands.join(", ")}`)
+
+    const servers = (await host.mcp.list({ location })).data.map((server: { readonly name: string }) => server.name).sort()
+    assert.deepEqual(servers, ["slack", "slack-work"], `MCP servers registered: ${servers.join(", ")}`)
 
     const agents = (await host.agent.list({ location })).data as readonly { readonly id: string; readonly permissions?: readonly { readonly action: string }[] }[]
     assert.deepEqual(
