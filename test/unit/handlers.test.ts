@@ -88,6 +88,31 @@ test("events_list never skips a same-timestamp event across a page boundary", as
   assert.deepEqual(third.events, [])
 })
 
+test("events_list keeps its since filter across every cursor page and repeats no event", async () => {
+  // The provider pages two messages at a time, so `C0AAWORK01` has a full first page and a later page with one more;
+  // the read asks for one event per page and keeps `since` and the scope on every call, as a consumer does.
+  const paged = createFakeProvider()
+  const provider = withProvider({
+    readChannel: async (alias, input, call) => paged.readChannel(alias, { ...input, limit: 2 }, call),
+  })
+  const table = handlersWith(provider)
+  const run = (input: Readonly<Record<string, unknown>>) => table["events_list"]!.run({ source: "workspace", since: SINCE, scope: WORK_SCOPE, ...input }, callFor("work")) as Promise<{ events: { external_id: string }[]; cursor: string }>
+  const matching = (await run({})).events.map((event) => event.external_id)
+  assert.deepEqual(matching, ["C0AAWORK01:1794996900.000100", "C0AAWORK01:1794997860.000200", "D0AAKAI001:1795065000.000400", "C0AAWORK01:1795075200.000300"])
+
+  const seen: string[] = []
+  let cursor: string | undefined
+  for (let page = 0; page < matching.length + 2; page++) {
+    const answer = await run({ limit: 1, ...(cursor === undefined ? {} : { cursor }) })
+    if (answer.events.length === 0) break
+    assert.equal(answer.events.length, 1, "one event per page")
+    seen.push(...answer.events.map((event) => event.external_id))
+    cursor = answer.cursor
+  }
+  assert.deepEqual(seen, matching)
+  assert.equal(new Set(seen).size, seen.length, "no page repeats an event")
+})
+
 test("events_list refuses a message that holds a secret, for good", async () => {
   const provider = withProvider({
     readChannel: async () => ({ messages: [{ ts: "1794996900.000100", user: "U0AAKAI001", text: `the migration key is token: ${FAKE_TOKEN}` }] }),
