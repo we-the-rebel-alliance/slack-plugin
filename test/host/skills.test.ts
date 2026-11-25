@@ -5,14 +5,17 @@
  * This test loads the built entry in the real `@opencode/sdk` host, activates it, and reads the host's skill list.
  */
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import type { Plugin } from "@opencode/plugin"
 import { OpenCode } from "@opencode/sdk"
 
-const SKILLS = ["slack", "slack-search"] as const
+const SKILLS = readdirSync(new URL("../../skills/", import.meta.url), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort()
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 test("the plugin registers every shipped skill on the real 2.4.1 host", { timeout: 120_000 }, async () => {
@@ -42,9 +45,10 @@ test("the plugin registers every shipped skill on the real 2.4.1 host", { timeou
     assert.ok(commands.includes("slack"), `commands missing /slack: ${commands.join(", ")}`)
 
     const agents = (await host.agent.list({ location })).data as readonly { readonly id: string; readonly permissions?: readonly { readonly action: string }[] }[]
-    assert.ok(
-      agents.some((agent) => (agent.permissions ?? []).some((rule) => rule.action === "slack.status")),
-      `no agent carries the generated slack.status rule: ${agents.map((agent) => agent.id).join(", ")}`,
+    assert.deepEqual(
+      agents.filter((agent) => !(agent.permissions ?? []).some((rule) => rule.action === "slack.status")).map((agent) => agent.id),
+      [],
+      "every agent carries the generated slack.status rule",
     )
 
     const status = await host.rpc.call({ rpcID: "slack", method: "status", input: { sessionID: session.id, input: {} }, location })

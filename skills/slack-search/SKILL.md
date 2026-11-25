@@ -34,7 +34,7 @@ source's limit is `TOO_LARGE` rather than cut.
   `{ "channels": ["C…", "D…"] }`; `tools.slack.channels_list` lists the conversations a person may confirm.
 - `tools.slack.mentions_list` lists the signed-in user's mentions. It is `effect: deny`, so it is denied at every level
   until a later allow rule names it.
-- Both take a cursor and answer one. Keep it per source and alias, and advance it only when `failed` is empty. With no
+- Both take a cursor and answer one. Keep it per source and alias, and advance it to the returned cursor; `refused[]` names anything left out for good. With no
   cursor, a read starts 24 hours back. The cursor keeps `since` and the scope: passing the same filter with the cursor
   never repeats or skips an event.
 

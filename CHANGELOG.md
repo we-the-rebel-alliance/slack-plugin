@@ -23,6 +23,9 @@ The first release on plugin-contract v0.
 - The TUI status dialog (the `slack.workspace.tui` plugin): the contract's `status` method and the `/slack` command show
   the same state, so the dialog duplicated a second UI surface. OpenCode 2.4 clients render status from the method; the
   old dialog's refresh key has no replacement, because the method is read on demand.
+- The `slack.dms` snapshot and `dms_list` (the old 35th method): phase 4a removed the app-only DMs inbox read per plan
+  §5.2, which keeps only the `workspace` and `mentions` sources; `slack.mentions` still searches direct and group
+  messages. The manifest now has 34 methods.
 - The tools RPC's `describe`: contract §18 makes `describe` diagnostics only, and the manifest and catalog are the
   discovery path. The tools RPC itself is replaced by the contract RPC id `slack` (see the parity table in the pull
   request).

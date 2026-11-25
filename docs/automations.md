@@ -14,7 +14,7 @@ source.
 ## The workspace feed
 
 An OpenCode automation on a timer runs a Code Mode program with no model. It keeps the cursor in its own state, applies
-the page, and advances the cursor only when nothing failed:
+the page, and advances the cursor once the page is accepted:
 
 ```js
 // input.state is this automation's own: { cursor?: string }
@@ -25,8 +25,8 @@ const page = await tools.slack.events_list({
   ...(state.cursor === undefined ? {} : { cursor: state.cursor }),
 })
 
-// Apply page.events, then page.removals. A failed event holds the cursor back.
-if ((page.failed ?? []).length === 0) state.cursor = page.cursor
+// Apply page.events, then page.refused. A refused event is final; the cursor moves past it.
+state.cursor = page.cursor
 
 return { state }
 ```
@@ -43,7 +43,7 @@ const page = await tools.slack.mentions_list({
   account: "work",
   ...(state.cursor === undefined ? {} : { cursor: state.cursor }),
 })
-if ((page.failed ?? []).length === 0) state.cursor = page.cursor
+state.cursor = page.cursor
 return { state }
 ```
 
@@ -59,5 +59,5 @@ re-read, never data.
 ## App-driven reads
 
 An app that binds a source reads it through the contract's `read` module with a grant, one consumer, one account and one
-scope. It keeps the cursor in the same transaction as the events it accepts, and holds it back when `failed[]` is not
+scope. It keeps the cursor in the same transaction as the events it accepts; a refused event is already past it.
 empty. The plugin never sees the app's cursor store.
