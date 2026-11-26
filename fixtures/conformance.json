@@ -47,7 +47,7 @@
             "account": "work",
             "owner": {
               "id": "slack:U0AAANA001",
-              "label": "Ana Silva"
+              "label": "<redacted:personal>"
             },
             "events": [
               {
@@ -177,7 +177,7 @@
             "account": "work",
             "owner": {
               "id": "slack:U0AAANA001",
-              "label": "Ana Silva"
+              "label": "<redacted:personal>"
             },
             "events": [],
             "cursor": "eyJ2IjoyLCJzIjoid29ya3NwYWNlIiwiYiI6IjI1YTI1OWEwNTk4MDU2OTMiLCJjIjp7IkMwQUFXT1JLMDEiOiIxNzk1MDc1MjAwLjAwMDMwMCIsIkQwQUFLQUkwMDEiOiIxNzk1MDY1MDAwLjAwMDQwMCJ9fQ",
@@ -210,7 +210,7 @@
             "account": "personal",
             "owner": {
               "id": "slack:U0BBANA002",
-              "label": "Ana Silva (personal)"
+              "label": "<redacted:personal>"
             },
             "events": [
               {
@@ -276,11 +276,11 @@
           "account": "work",
           "owner": {
             "id": "slack:U0AAANA001",
-            "label": "Ana Silva",
+            "label": "<redacted:personal>",
             "orgs": [
               {
                 "id": "slack-team:T0AAWORK01",
-                "label": "Acme"
+                "label": "<redacted:personal>"
               }
             ]
           },
@@ -318,7 +318,7 @@
             "account": "work",
             "owner": {
               "id": "slack:U0AAANA001",
-              "label": "Ana Silva"
+              "label": "<redacted:personal>"
             },
             "events": [
               {
@@ -407,11 +407,11 @@
           "options": [
             {
               "id": "C0AAWORK01",
-              "label": "research"
+              "label": "<redacted:personal>"
             },
             {
               "id": "D0AAKAI001",
-              "label": "Kai Mensah (direct message)"
+              "label": "<redacted:personal>"
             }
           ]
         }
@@ -431,7 +431,7 @@
             "account": "work",
             "owner": {
               "id": "slack:U0AAANA001",
-              "label": "Ana Silva"
+              "label": "<redacted:personal>"
             },
             "events": [
               {
@@ -478,7 +478,7 @@
             "account": "personal",
             "owner": {
               "id": "slack:U0BBANA002",
-              "label": "Ana Silva (personal)"
+              "label": "<redacted:personal>"
             },
             "events": [
               {
@@ -524,11 +524,11 @@
           "account": "work",
           "owner": {
             "id": "slack:U0AAANA001",
-            "label": "Ana Silva",
+            "label": "<redacted:personal>",
             "orgs": [
               {
                 "id": "slack-team:T0AAWORK01",
-                "label": "Acme"
+                "label": "<redacted:personal>"
               }
             ]
           },
@@ -572,11 +572,11 @@
           "state": "ready",
           "owner": {
             "id": "slack:U0AAANA001",
-            "label": "Ana Silva",
+            "label": "<redacted:personal>",
             "orgs": [
               {
                 "id": "slack-team:T0AAWORK01",
-                "label": "Acme"
+                "label": "<redacted:personal>"
               }
             ]
           }
@@ -586,11 +586,11 @@
           "state": "ready",
           "owner": {
             "id": "slack:U0BBANA002",
-            "label": "Ana Silva (personal)",
+            "label": "<redacted:personal>",
             "orgs": [
               {
                 "id": "slack-team:T0BBPERS01",
-                "label": "Home"
+                "label": "<redacted:personal>"
               }
             ]
           }

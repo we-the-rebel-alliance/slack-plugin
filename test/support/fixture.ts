@@ -39,7 +39,9 @@ function redacted(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redacted)
   if (value === null || typeof value !== "object") return value
   const out: Record<string, unknown> = {}
-  for (const [key, entry] of Object.entries(value)) out[key] = redacted(entry)
+  for (const [key, entry] of Object.entries(value)) {
+    out[key] = key === "label" && typeof entry === "string" ? "<redacted:personal>" : redacted(entry)
+  }
   const events = (value as { readonly events?: unknown }).events
   if (Array.isArray(events) && events.length > 0) {
     out["events"] = events.map((event) => {
