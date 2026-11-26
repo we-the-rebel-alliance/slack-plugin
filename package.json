@@ -27,7 +27,8 @@
     "skills",
     "assets",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "bundle": "node scripts/build.mjs",
