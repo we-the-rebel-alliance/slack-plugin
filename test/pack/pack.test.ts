@@ -31,6 +31,7 @@ test("the tarball holds the files whitelist, installs with no runtime dependenci
     const paths = packed[0]!.files.map((file) => file.path).sort()
     assert.deepEqual(paths, [
       "LICENSE",
+      "NOTICE",
       "README.md",
       "assets/icon-128.png",
       "assets/icon-256.png",
