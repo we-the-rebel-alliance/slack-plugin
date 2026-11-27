@@ -22,7 +22,7 @@ concurrency:
 jobs:
   build:
     name: build
-    runs-on: ubuntu-24.04
+    runs-on: boxd-public
     timeout-minutes: 20
     permissions:
       contents: read
@@ -75,7 +75,7 @@ jobs:
   publish:
     name: publish
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: boxd-public
     timeout-minutes: 10
     permissions:
       contents: write
